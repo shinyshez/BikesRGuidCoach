@@ -30,7 +30,7 @@ class VideoComparisonActivity : AppCompatActivity() {
     private lateinit var video2Title: TextView
     private lateinit var playBothButton: Button
     private lateinit var pauseBothButton: Button
-    private lateinit var syncButton: Button
+    private lateinit var lockButton: Button
     private lateinit var layoutToggleButton: ImageButton
     
     // Individual controls for Video 1
@@ -50,6 +50,8 @@ class VideoComparisonActivity : AppCompatActivity() {
     private var isSideBySide = true
     private var video1Duration = 0
     private var video2Duration = 0
+    private var isLocked = false
+    private var positionOffset = 0 // Video2 position - Video1 position
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -77,7 +79,7 @@ class VideoComparisonActivity : AppCompatActivity() {
         // Global controls
         playBothButton = findViewById(R.id.playBothButton)
         pauseBothButton = findViewById(R.id.pauseBothButton)
-        syncButton = findViewById(R.id.syncButton)
+        lockButton = findViewById(R.id.lockButton)
         layoutToggleButton = findViewById(R.id.layoutToggleButton)
         
         // Individual controls for Video 1
@@ -159,9 +161,8 @@ class VideoComparisonActivity : AppCompatActivity() {
             pauseVideos()
         }
         
-        syncButton.setOnClickListener {
-            syncVideos()
-            Toast.makeText(this, "Video 2 synced to Video 1", Toast.LENGTH_SHORT).show()
+        lockButton.setOnClickListener {
+            toggleLock()
         }
         
         layoutToggleButton.setOnClickListener {
@@ -170,10 +171,19 @@ class VideoComparisonActivity : AppCompatActivity() {
         
         // Individual controls for Video 1
         playPause1.setOnClickListener {
-            if (isVideo1Playing) {
-                pauseVideo1()
+            if (isLocked) {
+                // When locked, control both videos
+                if (isVideo1Playing || isVideo2Playing) {
+                    pauseVideos()
+                } else {
+                    playVideos()
+                }
             } else {
-                playVideo1()
+                if (isVideo1Playing) {
+                    pauseVideo1()
+                } else {
+                    playVideo1()
+                }
             }
         }
         
@@ -182,11 +192,25 @@ class VideoComparisonActivity : AppCompatActivity() {
                 if (fromUser) {
                     videoView1.seekTo(progress)
                     updateTimeDisplay1(progress)
+                    
+                    if (isLocked) {
+                        // Seek video2 with preserved offset
+                        val video2Position = progress + positionOffset
+                        if (video2Position >= 0 && video2Position <= video2Duration) {
+                            videoView2.seekTo(video2Position)
+                            seekBar2.progress = video2Position
+                            updateTimeDisplay2(video2Position)
+                        }
+                    }
                 }
             }
             
             override fun onStartTrackingTouch(seekBar: SeekBar?) {
-                pauseVideo1()
+                if (isLocked) {
+                    pauseVideos()
+                } else {
+                    pauseVideo1()
+                }
             }
             
             override fun onStopTrackingTouch(seekBar: SeekBar?) {
@@ -196,10 +220,19 @@ class VideoComparisonActivity : AppCompatActivity() {
         
         // Individual controls for Video 2
         playPause2.setOnClickListener {
-            if (isVideo2Playing) {
-                pauseVideo2()
+            if (isLocked) {
+                // When locked, control both videos
+                if (isVideo1Playing || isVideo2Playing) {
+                    pauseVideos()
+                } else {
+                    playVideos()
+                }
             } else {
-                playVideo2()
+                if (isVideo2Playing) {
+                    pauseVideo2()
+                } else {
+                    playVideo2()
+                }
             }
         }
         
@@ -208,11 +241,25 @@ class VideoComparisonActivity : AppCompatActivity() {
                 if (fromUser) {
                     videoView2.seekTo(progress)
                     updateTimeDisplay2(progress)
+                    
+                    if (isLocked) {
+                        // Seek video1 with preserved offset
+                        val video1Position = progress - positionOffset
+                        if (video1Position >= 0 && video1Position <= video1Duration) {
+                            videoView1.seekTo(video1Position)
+                            seekBar1.progress = video1Position
+                            updateTimeDisplay1(video1Position)
+                        }
+                    }
                 }
             }
             
             override fun onStartTrackingTouch(seekBar: SeekBar?) {
-                pauseVideo2()
+                if (isLocked) {
+                    pauseVideos()
+                } else {
+                    pauseVideo2()
+                }
             }
             
             override fun onStopTrackingTouch(seekBar: SeekBar?) {
@@ -276,15 +323,26 @@ class VideoComparisonActivity : AppCompatActivity() {
         }
     }
     
-    private fun syncVideos() {
-        try {
+    private fun toggleLock() {
+        isLocked = !isLocked
+        
+        if (isLocked) {
+            // Calculate current offset when locking
             val position1 = videoView1.currentPosition
-            videoView2.seekTo(position1)
-            seekBar2.progress = position1
-            updateTimeDisplay2(position1)
-            Log.d(TAG, "Synced video 2 to video 1 position: $position1")
-        } catch (e: Exception) {
-            Log.e(TAG, "Error syncing videos", e)
+            val position2 = videoView2.currentPosition
+            positionOffset = position2 - position1
+            
+            lockButton.text = "Unlock"
+            lockButton.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF44AA44.toInt()) // Green
+            Toast.makeText(this, "Videos locked with offset: ${positionOffset}ms", Toast.LENGTH_SHORT).show()
+            
+            Log.d(TAG, "Locked videos with offset: $positionOffset")
+        } else {
+            lockButton.text = "Lock"
+            lockButton.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF4444FF.toInt()) // Blue
+            Toast.makeText(this, "Videos unlocked - independent control", Toast.LENGTH_SHORT).show()
+            
+            Log.d(TAG, "Unlocked videos")
         }
     }
     

@@ -214,10 +214,10 @@
                 android:textColor="#FFFFFF" />
 
             <Button
-                android:id="@+id/syncButton"
+                android:id="@+id/lockButton"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Sync V2→V1"
+                android:text="Lock"
                 android:layout_marginEnd="12dp"
                 android:backgroundTint="#4444FF"
                 android:textColor="#FFFFFF" />
