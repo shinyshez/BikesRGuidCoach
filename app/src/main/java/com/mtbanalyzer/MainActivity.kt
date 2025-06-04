@@ -46,12 +46,16 @@ class MainActivity : AppCompatActivity() {
     private val recordingDurationMs = 8000L // 8 seconds
     private var riderLastSeenTime = 0L
     private val postRiderDelayMs = 2000L // 2 seconds after rider leaves
+    private var lastRecordingAttemptTime = 0L
+    private val recordingCooldownMs = 1000L // 1 second cooldown between attempts
     
     // Recording state tracking
     private enum class RecordingState {
         IDLE, RECORDING, ERROR, SAVING
     }
+    @Volatile
     private var recordingState = RecordingState.IDLE
+    private val recordingLock = Object()
 
     companion object {
         private const val TAG = "MTBAnalyzer"
@@ -80,6 +84,18 @@ class MainActivity : AppCompatActivity() {
             statusText = findViewById(R.id.statusText)
             recordingStatus = findViewById(R.id.recordingStatus)
             recordingOverlay = findViewById(R.id.recordingOverlay)
+            
+            // Test button for manual recording
+            findViewById<android.widget.Button>(R.id.testRecordButton).setOnClickListener {
+                Log.d(TAG, "Test record button clicked")
+                if (recording == null) {
+                    Log.d(TAG, "Starting test recording...")
+                    startRecording()
+                } else {
+                    Log.d(TAG, "Stopping test recording...")
+                    stopRecording()
+                }
+            }
 
             // Initialize pose detector for rider detection
             val options = PoseDetectorOptions.Builder()
@@ -89,6 +105,8 @@ class MainActivity : AppCompatActivity() {
 
             Log.d(TAG, "App started successfully")
 
+            cameraExecutor = Executors.newSingleThreadExecutor()
+
             if (allPermissionsGranted()) {
                 Log.d(TAG, "All permissions granted, starting camera")
                 startCamera()
@@ -96,8 +114,6 @@ class MainActivity : AppCompatActivity() {
                 Log.d(TAG, "Requesting permissions")
                 ActivityCompat.requestPermissions(this, REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS)
             }
-
-            cameraExecutor = Executors.newSingleThreadExecutor()
 
         } catch (e: Exception) {
             Log.e(TAG, "Error in onCreate", e)
@@ -125,9 +141,14 @@ class MainActivity : AppCompatActivity() {
                 )
             }
 
-            // Video capture
+            // Video capture with fallback strategy
+            val qualitySelector = QualitySelector.fromOrderedList(
+                listOf(Quality.HD, Quality.SD, Quality.LOWEST),
+                FallbackStrategy.lowerQualityOrHigherThan(Quality.LOWEST)
+            )
+            
             val recorder = Recorder.Builder()
-                .setQualitySelector(QualitySelector.from(Quality.HD))
+                .setQualitySelector(qualitySelector)
                 .build()
             videoCapture = VideoCapture.withOutput(recorder)
 
@@ -142,10 +163,16 @@ class MainActivity : AppCompatActivity() {
             val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
 
             try {
-                cameraProvider.unbindAll()
-                cameraProvider.bindToLifecycle(
-                    this, cameraSelector, preview, videoCapture, imageAnalyzer
-                )
+                // Check if lifecycle is still valid
+                if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.CREATED)) {
+                    cameraProvider.unbindAll()
+                    cameraProvider.bindToLifecycle(
+                        this, cameraSelector, preview, videoCapture, imageAnalyzer
+                    )
+                    Log.d(TAG, "Camera bound successfully")
+                } else {
+                    Log.w(TAG, "Lifecycle not ready for camera binding")
+                }
             } catch (exc: Exception) {
                 Log.e(TAG, "Camera binding failed", exc)
             }
@@ -163,7 +190,7 @@ class MainActivity : AppCompatActivity() {
                 // Update overlay with image dimensions
                 // Note: For portrait orientation, width and height may need to be swapped
                 val rotationDegrees = imageProxy.imageInfo.rotationDegrees
-                Log.d(TAG, "ImageProxy: ${imageProxy.width}x${imageProxy.height}, rotation: $rotationDegrees")
+                //Log.d(TAG, "ImageProxy: ${imageProxy.width}x${imageProxy.height}, rotation: $rotationDegrees")
                 
                 runOnUiThread {
                     if (rotationDegrees == 90 || rotationDegrees == 270) {
@@ -213,11 +240,16 @@ class MainActivity : AppCompatActivity() {
                                 Log.d(TAG, "Rider entered frame. Recording status: ${recording != null}")
                                 
                                 // Only start new recording if not already recording
-                                if (recording == null) {
-                                    Log.d(TAG, "Starting new recording...")
-                                    startRecording()
-                                } else {
-                                    Log.d(TAG, "Rider re-detected - continuing existing recording")
+                                synchronized(recordingLock) {
+                                    val timeSinceLastAttempt = currentTime - lastRecordingAttemptTime
+                                    if (recording == null && recordingState == RecordingState.IDLE && 
+                                        timeSinceLastAttempt > recordingCooldownMs) {
+                                        Log.d(TAG, "Starting new recording...")
+                                        lastRecordingAttemptTime = currentTime
+                                        startRecording()
+                                    } else {
+                                        Log.d(TAG, "Rider re-detected - skipping (recording=$recording, state=$recordingState, cooldown=${timeSinceLastAttempt}ms)")
+                                    }
                                 }
                             }
                         } else if (!riderCurrentlyDetected && isRiderDetected) {
@@ -227,7 +259,7 @@ class MainActivity : AppCompatActivity() {
                         }
 
                         // Stop recording either after max duration OR 2 seconds after rider left
-                        if (recording != null) {
+                        if (recording != null && recordingStartTime > 0) {
                             val elapsedSinceStart = currentTime - recordingStartTime
                             val elapsedSinceRiderLeft = currentTime - riderLastSeenTime
                             
@@ -256,40 +288,51 @@ class MainActivity : AppCompatActivity() {
 
     private fun startRecording() {
         val videoCapture = this.videoCapture ?: run {
-            Log.e(TAG, "startRecording: videoCapture is null!")
-            return
-        }
-
-        // Safety check - should not happen with new logic
-        if (recording != null) {
-            Log.w(TAG, "startRecording called but recording already exists!")
+            Log.e(TAG, "videoCapture is null!")
             return
         }
         
-        Log.d(TAG, "startRecording: Creating new recording...")
+        synchronized(recordingLock) {
+            Log.d(TAG, "startRecording called, current state: $recordingState")
+            
+            // Prevent concurrent recording attempts
+            if (recordingState != RecordingState.IDLE) {
+                Log.w(TAG, "Cannot start recording - current state is $recordingState")
+                return
+            }
+
+            if (recording != null) {
+                Log.w(TAG, "Recording object exists but should be null in IDLE state")
+                return
+            }
+            
+            // Set state immediately to prevent race conditions
+            recordingState = RecordingState.RECORDING
+        }
 
         val name = SimpleDateFormat("yyyy-MM-dd-HH-mm-ss-SSS", Locale.US)
             .format(System.currentTimeMillis())
-        
-        // Create output file in app's external files directory
-        val outputDir = getExternalFilesDir(android.os.Environment.DIRECTORY_MOVIES)
-        val outputFile = File(outputDir, "MTB_$name.mp4")
-        
-        val fileOutputOptions = FileOutputOptions.Builder(outputFile).build()
-
-        recording = videoCapture.output
-            .prepareRecording(this, fileOutputOptions)
-            .apply {
-                if (ContextCompat.checkSelfPermission(this@MainActivity,
-                        Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-                    withAudioEnabled()
-                }
+        val contentValues = android.content.ContentValues().apply {
+            put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, "MTB_$name")
+            put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "video/mp4")
+            if (android.os.Build.VERSION.SDK_INT > android.os.Build.VERSION_CODES.P) {
+                put(android.provider.MediaStore.Video.Media.RELATIVE_PATH, "Movies/MTBAnalyzer")
             }
+        }
+
+        val mediaStoreOutputOptions = MediaStoreOutputOptions
+            .Builder(contentResolver, android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI)
+            .setContentValues(contentValues)
+            .build()
+
+        Log.d(TAG, "Preparing recording with output: $mediaStoreOutputOptions")
+        
+        recording = videoCapture.output
+            .prepareRecording(this, mediaStoreOutputOptions)
             .start(ContextCompat.getMainExecutor(this)) { recordEvent ->
                 when(recordEvent) {
                     is VideoRecordEvent.Start -> {
                         recordingStartTime = System.currentTimeMillis()
-                        recordingState = RecordingState.RECORDING
                         runOnUiThread {
                             recordingOverlay.visibility = View.VISIBLE
                             statusIndicator.setBackgroundResource(R.drawable.circle_indicator)
@@ -302,7 +345,9 @@ class MainActivity : AppCompatActivity() {
                         if (!recordEvent.hasError()) {
                             val msg = "Video capture succeeded: ${recordEvent.outputResults.outputUri}"
                             Log.d(TAG, msg)
-                            recordingState = RecordingState.SAVING
+                            synchronized(recordingLock) {
+                                recordingState = RecordingState.SAVING
+                            }
                             runOnUiThread {
                                 recordingOverlay.visibility = View.GONE
                                 recordingStatus.text = "Video saved!"
@@ -311,13 +356,20 @@ class MainActivity : AppCompatActivity() {
                             }
                             // Reset to idle after a delay
                             viewFinder.postDelayed({
-                                if (recordingState == RecordingState.SAVING) {
-                                    recordingState = RecordingState.IDLE
+                                synchronized(recordingLock) {
+                                    if (recordingState == RecordingState.SAVING) {
+                                        recordingState = RecordingState.IDLE
+                                    }
                                 }
                             }, 2000)
                         } else {
+                            recording?.close()
+                            recording = null
+                            recordingStartTime = 0L
                             Log.e(TAG, "Video capture failed: ${recordEvent.error}")
-                            recordingState = RecordingState.ERROR
+                            synchronized(recordingLock) {
+                                recordingState = RecordingState.ERROR
+                            }
                             runOnUiThread {
                                 recordingOverlay.visibility = View.GONE
                                 recordingStatus.text = "Recording failed - Error ${recordEvent.error}"
@@ -326,12 +378,13 @@ class MainActivity : AppCompatActivity() {
                             }
                             // Reset to idle after showing error
                             viewFinder.postDelayed({
-                                if (recordingState == RecordingState.ERROR) {
-                                    recordingState = RecordingState.IDLE
+                                synchronized(recordingLock) {
+                                    if (recordingState == RecordingState.ERROR) {
+                                        recordingState = RecordingState.IDLE
+                                    }
                                 }
                             }, 3000)
                         }
-                        recording = null
                     }
                 }
             }
@@ -342,6 +395,7 @@ class MainActivity : AppCompatActivity() {
         if (currentRecording != null) {
             currentRecording.stop()
             recording = null
+            recordingStartTime = 0L
             Log.d(TAG, "Recording stopped")
         } else {
             Log.w(TAG, "stopRecording called but no recording exists")
@@ -401,6 +455,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        recording?.stop()
+        recording = null
         cameraExecutor.shutdown()
         poseDetector.close()
     }

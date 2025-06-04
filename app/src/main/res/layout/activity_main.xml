@@ -102,8 +102,16 @@
             android:layout_marginEnd="16dp"
             android:background="?android:attr/selectableItemBackgroundBorderless"
             android:src="@android:drawable/ic_menu_preferences"
-            android:tint="@android:color/white"
+            app:tint="@android:color/white"
             android:contentDescription="Settings" />
+            
+        <!-- Test Record Button -->
+        <Button
+            android:id="@+id/testRecordButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Test Record"
+            android:layout_marginEnd="16dp" />
 
     </LinearLayout>
 
