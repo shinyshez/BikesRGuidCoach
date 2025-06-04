@@ -141,15 +141,35 @@ class VideoGalleryActivity : AppCompatActivity() {
     
     private fun playVideo(uri: Uri) {
         try {
+            // Try multiple approaches to play video
             val intent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, "video/*")
+                setDataAndType(uri, "video/mp4")
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             
-            if (intent.resolveActivity(packageManager) != null) {
+            // Check if any app can handle the intent
+            val activities = packageManager.queryIntentActivities(intent, 0)
+            
+            if (activities.isNotEmpty()) {
                 startActivity(intent)
             } else {
-                Toast.makeText(this, "No video player found", Toast.LENGTH_SHORT).show()
+                // Try with a chooser
+                val chooserIntent = Intent.createChooser(intent, "Play video with")
+                if (chooserIntent.resolveActivity(packageManager) != null) {
+                    startActivity(chooserIntent)
+                } else {
+                    // Last resort - try opening with any app
+                    try {
+                        val fallbackIntent = Intent(Intent.ACTION_VIEW, uri).apply {
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        startActivity(fallbackIntent)
+                    } catch (e: Exception) {
+                        Toast.makeText(this, "No video player app found. Please install a video player.", Toast.LENGTH_LONG).show()
+                    }
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error playing video", e)

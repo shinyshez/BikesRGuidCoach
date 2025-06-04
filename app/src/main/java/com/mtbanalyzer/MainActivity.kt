@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.provider.MediaStore
 import android.util.Log
 import android.view.View
 import android.widget.TextView
@@ -17,6 +18,7 @@ import com.google.mlkit.vision.pose.PoseDetector
 import com.google.mlkit.vision.pose.defaults.PoseDetectorOptions
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.Calendar
 
 class MainActivity : AppCompatActivity(), 
     CameraManager.CameraCallback,
@@ -92,6 +94,9 @@ class MainActivity : AppCompatActivity(),
             // Update time display
             updateTimeDisplay()
             
+            // Update video count
+            updateVideoCount()
+            
             // Test button for manual recording
             findViewById<android.widget.Button>(R.id.testRecordButton).setOnClickListener {
                 manualStartRecording()
@@ -125,9 +130,10 @@ class MainActivity : AppCompatActivity(),
     }
 
     private fun initializeComponents() {
+        val settingsManager = SettingsManager(this)
         cameraManager = CameraManager(this, this, cameraExecutor)
         recordingManager = RecordingManager(this, contentResolver)
-        poseDetectionProcessor = PoseDetectionProcessor(poseDetector, graphicOverlay)
+        poseDetectionProcessor = PoseDetectionProcessor(poseDetector, graphicOverlay, settingsManager)
         uiStateManager = UIStateManager(
             this, statusIndicator, statusText, recordingStatus, recordingOverlay,
             confidenceText, pulseRing, recordingProgress, recordingDot
@@ -144,6 +150,46 @@ class MainActivity : AppCompatActivity(),
         
         // Update every minute
         timeDisplay.postDelayed({ updateTimeDisplay() }, 60000)
+    }
+    
+    private fun updateVideoCount() {
+        try {
+            val projection = arrayOf(MediaStore.Video.Media._ID, MediaStore.Video.Media.DATE_ADDED)
+            val selection = "${MediaStore.Video.Media.DISPLAY_NAME} LIKE ?"
+            val selectionArgs = arrayOf("MTB_%")
+            
+            val cursor = contentResolver.query(
+                MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+                projection,
+                selection,
+                selectionArgs,
+                null
+            )
+            
+            var todayCount = 0
+            val todayStart = Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }.timeInMillis / 1000 // MediaStore uses seconds
+            
+            cursor?.use {
+                val dateColumn = it.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_ADDED)
+                while (it.moveToNext()) {
+                    val dateAdded = it.getLong(dateColumn)
+                    if (dateAdded >= todayStart) {
+                        todayCount++
+                    }
+                }
+            }
+            
+            segmentCount.text = "$todayCount videos recorded today"
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Error counting videos", e)
+            segmentCount.text = "0 videos recorded today"
+        }
     }
 
     private fun startCamera() {
@@ -166,6 +212,8 @@ class MainActivity : AppCompatActivity(),
     override fun onRecordingStarted() {
         runOnUiThread {
             uiStateManager.updateRecordingStarted()
+            // Notify pose processor that recording has actually started
+            poseDetectionProcessor.setRecordingStarted()
         }
     }
 
@@ -173,9 +221,13 @@ class MainActivity : AppCompatActivity(),
         runOnUiThread {
             if (success) {
                 uiStateManager.updateRecordingFinished(true, "Video saved!")
+                // Update video count after successful recording
+                updateVideoCount()
             } else {
                 uiStateManager.updateRecordingFinished(false, error ?: "Recording failed")
             }
+            // Notify pose processor that recording has stopped
+            poseDetectionProcessor.setRecordingStopped()
         }
     }
 
@@ -216,6 +268,7 @@ class MainActivity : AppCompatActivity(),
     override fun onStopRecording() {
         if (recordingManager.isRecording()) {
             recordingManager.stopRecording()
+            // Will be marked as stopped in onRecordingFinished callback
         }
     }
 
@@ -259,6 +312,12 @@ class MainActivity : AppCompatActivity(),
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Update video count when returning to the app
+        updateVideoCount()
+    }
+    
     override fun onDestroy() {
         super.onDestroy()
         recordingManager.release()

@@ -16,6 +16,7 @@ class UIStateManager(
     private val recordingProgress: android.widget.ProgressBar? = null,
     private val recordingDot: View? = null
 ) {
+    private val settingsManager = SettingsManager(context)
     companion object {
         private const val TAG = "UIStateManager"
     }
@@ -29,11 +30,17 @@ class UIStateManager(
     }
 
     private var currentState = AppState.MONITORING
+    private var lastConfidence = 0.0
 
     fun updateDetectionState(riderDetected: Boolean, confidence: Double, isRecording: Boolean) {
         if (isRecording) {
             // Don't update detection state while recording
             return
+        }
+
+        // Always update last confidence if we have detection data
+        if (confidence > 0) {
+            lastConfidence = confidence
         }
 
         when {
@@ -65,7 +72,12 @@ class UIStateManager(
                     updateState(AppState.MONITORING)
                     statusIndicator.backgroundTintList = ContextCompat.getColorStateList(context, android.R.color.holo_orange_light)
                     statusText.text = "Monitoring"
-                    confidenceText?.text = ""
+                    // Keep showing last confidence value instead of clearing it
+                    confidenceText?.text = if (lastConfidence > 0) {
+                        String.format("Last: %.1f%%", lastConfidence * 100)
+                    } else {
+                        "No detection yet"
+                    }
                     recordingStatus.text = "Waiting for rider..."
                     pulseRing?.visibility = View.GONE
                 }
@@ -83,7 +95,8 @@ class UIStateManager(
         statusIndicator.backgroundTintList = ContextCompat.getColorStateList(context, android.R.color.holo_red_light)
         statusText.text = "Recording"
         confidenceText?.text = ""
-        recordingStatus.text = "Recording: 0.0s / 8.0s"
+        val maxDurationSec = settingsManager.getRecordingDuration()
+        recordingStatus.text = "Recording: 0.0s / ${maxDurationSec}.0s"
         pulseRing?.visibility = View.GONE
         
         // Animate recording dot
@@ -116,10 +129,11 @@ class UIStateManager(
         }
     }
 
-    fun updateRecordingProgress(elapsedMs: Long, maxDurationMs: Long = 8000L) {
+    fun updateRecordingProgress(elapsedMs: Long) {
         if (currentState == AppState.RECORDING) {
             val seconds = elapsedMs / 1000
             val tenths = (elapsedMs % 1000) / 100
+            val maxDurationMs = settingsManager.getRecordingDurationMs()
             val progress = ((elapsedMs.toFloat() / maxDurationMs) * 100).toInt()
             
             recordingStatus.text = String.format(
@@ -186,7 +200,12 @@ class UIStateManager(
         updateState(AppState.MONITORING)
         statusIndicator.backgroundTintList = ContextCompat.getColorStateList(context, android.R.color.holo_orange_light)
         statusText.text = "Monitoring"
-        confidenceText?.text = ""
+        // Keep showing last confidence instead of clearing
+        confidenceText?.text = if (lastConfidence > 0) {
+            String.format("Last: %.1f%%", lastConfidence * 100)
+        } else {
+            "No detection yet"
+        }
         recordingStatus.text = "Waiting for rider..."
         recordingOverlay.visibility = View.GONE
         recordingProgress?.visibility = View.GONE

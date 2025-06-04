@@ -9,8 +9,7 @@ import com.google.mlkit.vision.pose.PoseDetector
 class PoseDetectionProcessor(
     private val poseDetector: PoseDetector,
     private val graphicOverlay: GraphicOverlay,
-    private val recordingDurationMs: Long = 8000L,
-    private val postRiderDelayMs: Long = 2000L,
+    private val settingsManager: SettingsManager,
     private val recordingCooldownMs: Long = 1000L
 ) : ImageAnalysis.Analyzer {
 
@@ -30,10 +29,25 @@ class PoseDetectionProcessor(
     private var isRiderDetected = false
     private var riderLastSeenTime = 0L
     private var lastRecordingAttemptTime = 0L
+    private var recordingStartTime = 0L
+    private var isCurrentlyRecording = false
     private var callback: PoseDetectionCallback? = null
 
     fun setCallback(callback: PoseDetectionCallback) {
         this.callback = callback
+    }
+    
+    fun setRecordingStarted() {
+        recordingStartTime = System.currentTimeMillis()
+        isCurrentlyRecording = true
+        Log.d(TAG, "Recording started at $recordingStartTime")
+    }
+    
+    fun setRecordingStopped() {
+        isCurrentlyRecording = false
+        recordingStartTime = 0L
+        lastRecordingAttemptTime = 0L
+        Log.d(TAG, "Recording stopped")
     }
 
     @androidx.camera.core.ExperimentalGetImage
@@ -79,9 +93,9 @@ class PoseDetectionProcessor(
     private fun processPoseDetection(pose: com.google.mlkit.vision.pose.Pose) {
         val currentTime = System.currentTimeMillis()
 
-        // Draw pose on overlay
+        // Draw pose on overlay (if enabled in settings)
         graphicOverlay.clear()
-        if (pose.allPoseLandmarks.isNotEmpty()) {
+        if (pose.allPoseLandmarks.isNotEmpty() && settingsManager.shouldShowPoseOverlay()) {
             val poseGraphic = PoseGraphic(graphicOverlay, pose)
             graphicOverlay.add(poseGraphic)
         }
@@ -113,17 +127,18 @@ class PoseDetectionProcessor(
                 
                 // Check if we should start recording
                 val timeSinceLastAttempt = currentTime - lastRecordingAttemptTime
-                if (timeSinceLastAttempt > recordingCooldownMs) {
+                if (timeSinceLastAttempt > recordingCooldownMs && !isCurrentlyRecording) {
                     Log.d(TAG, "Starting new recording...")
                     lastRecordingAttemptTime = currentTime
                     callback?.onStartRecording()
                 } else {
-                    Log.d(TAG, "Rider re-detected - skipping due to cooldown (${timeSinceLastAttempt}ms)")
+                    Log.d(TAG, "Rider re-detected - skipping due to cooldown (${timeSinceLastAttempt}ms) or already recording")
                 }
             }
         } else if (!riderCurrentlyDetected && isRiderDetected) {
             // Rider left frame
             isRiderDetected = false
+            val postRiderDelayMs = settingsManager.getPostRiderDelayMs()
             Log.d(TAG, "Rider left frame - continuing recording for ${postRiderDelayMs}ms")
             callback?.onRiderLost()
         }
@@ -133,20 +148,22 @@ class PoseDetectionProcessor(
         // This method checks if recording should stop based on duration or rider absence
         // The actual recording state is managed by RecordingManager
         callback?.let { cb ->
-            // Only process recording logic if a recording was started
-            if (lastRecordingAttemptTime > 0) {
-                val elapsedSinceStart = currentTime - lastRecordingAttemptTime
+            // Only process recording logic if we're actually recording
+            if (isCurrentlyRecording && recordingStartTime > 0) {
+                val elapsedSinceStart = currentTime - recordingStartTime
                 val elapsedSinceRiderLeft = currentTime - riderLastSeenTime
                 
                 // Notify about recording progress
                 cb.onUpdateRecordingProgress(elapsedSinceStart)
                 
                 // Check if recording should stop
+                val recordingDurationMs = settingsManager.getRecordingDurationMs()
+                val postRiderDelayMs = settingsManager.getPostRiderDelayMs()
+                
                 if (elapsedSinceStart > recordingDurationMs || 
                     (!isRiderDetected && elapsedSinceRiderLeft > postRiderDelayMs)) {
                     cb.onStopRecording()
-                    // Reset the recording attempt time after stopping
-                    lastRecordingAttemptTime = 0L
+                    // Recording will be marked as stopped when callback is received
                 }
             }
         }

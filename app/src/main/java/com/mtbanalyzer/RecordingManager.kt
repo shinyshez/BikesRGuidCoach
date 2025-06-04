@@ -3,6 +3,9 @@ package com.mtbanalyzer
 import android.content.ContentResolver
 import android.content.Context
 import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.util.Log
 import androidx.camera.video.*
 import androidx.core.content.ContextCompat
@@ -13,6 +16,15 @@ class RecordingManager(
     private val context: Context,
     private val contentResolver: ContentResolver
 ) {
+    private val settingsManager = SettingsManager(context)
+    private val soundManager = SoundManager(context)
+    private val vibrator: Vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+        vibratorManager.defaultVibrator
+    } else {
+        @Suppress("DEPRECATION")
+        context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+    }
     companion object {
         private const val TAG = "RecordingManager"
     }
@@ -89,6 +101,14 @@ class RecordingManager(
                 recordingStartTime = System.currentTimeMillis()
                 callback.onRecordingStarted()
                 Log.d(TAG, "Recording started")
+                
+                // Haptic feedback on recording start
+                if (settingsManager.isHapticFeedbackEnabled()) {
+                    performHapticFeedback(HapticPattern.RECORDING_START)
+                }
+                
+                // Sound feedback on recording start
+                soundManager.playRecordingStart()
             }
             is VideoRecordEvent.Finalize -> {
                 if (!recordEvent.hasError()) {
@@ -98,6 +118,14 @@ class RecordingManager(
                         recordingState = RecordingState.SAVING
                     }
                     callback.onRecordingFinished(true, recordEvent.outputResults.outputUri.toString(), null)
+                    
+                    // Haptic feedback on successful recording
+                    if (settingsManager.isHapticFeedbackEnabled()) {
+                        performHapticFeedback(HapticPattern.RECORDING_SUCCESS)
+                    }
+                    
+                    // Sound feedback on successful recording
+                    soundManager.playRecordingStop()
                     
                     // Reset to idle after a delay
                     android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
@@ -116,6 +144,14 @@ class RecordingManager(
                         recordingState = RecordingState.ERROR
                     }
                     callback.onRecordingFinished(false, null, "Error ${recordEvent.error}")
+                    
+                    // Haptic feedback on recording error
+                    if (settingsManager.isHapticFeedbackEnabled()) {
+                        performHapticFeedback(HapticPattern.RECORDING_ERROR)
+                    }
+                    
+                    // Sound feedback on recording error
+                    soundManager.playError()
                     
                     // Reset to idle after showing error
                     android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
@@ -161,6 +197,35 @@ class RecordingManager(
         synchronized(recordingLock) {
             recordingState = RecordingState.IDLE
         }
+        soundManager.release()
         Log.d(TAG, "Recording resources released")
+    }
+    
+    private enum class HapticPattern {
+        RECORDING_START,
+        RECORDING_SUCCESS,
+        RECORDING_ERROR
+    }
+    
+    private fun performHapticFeedback(pattern: HapticPattern) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val effect = when (pattern) {
+                    HapticPattern.RECORDING_START -> VibrationEffect.createOneShot(100, VibrationEffect.DEFAULT_AMPLITUDE)
+                    HapticPattern.RECORDING_SUCCESS -> VibrationEffect.createWaveform(longArrayOf(0, 50, 100, 50), -1)
+                    HapticPattern.RECORDING_ERROR -> VibrationEffect.createWaveform(longArrayOf(0, 100, 50, 100), -1)
+                }
+                vibrator.vibrate(effect)
+            } else {
+                @Suppress("DEPRECATION")
+                when (pattern) {
+                    HapticPattern.RECORDING_START -> vibrator.vibrate(100)
+                    HapticPattern.RECORDING_SUCCESS -> vibrator.vibrate(longArrayOf(0, 50, 100, 50), -1)
+                    HapticPattern.RECORDING_ERROR -> vibrator.vibrate(longArrayOf(0, 100, 50, 100), -1)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to perform haptic feedback", e)
+        }
     }
 }
