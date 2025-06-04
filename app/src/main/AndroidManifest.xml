@@ -48,6 +48,12 @@
             android:exported="false"
             android:parentActivityName=".MainActivity"
             android:screenOrientation="landscape" />
+            
+        <activity
+            android:name=".VideoComparisonActivity"
+            android:exported="false"
+            android:parentActivityName=".VideoGalleryActivity"
+            android:screenOrientation="landscape" />
 
     </application>
 

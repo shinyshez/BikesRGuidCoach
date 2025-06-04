@@ -39,7 +39,11 @@ class VideoGalleryActivity : AppCompatActivity() {
     private lateinit var recyclerView: RecyclerView
     private lateinit var emptyView: TextView
     private lateinit var adapter: VideoAdapter
+    private lateinit var compareButton: com.google.android.material.floatingactionbutton.FloatingActionButton
+    private lateinit var cancelCompareButton: android.widget.Button
     private val videos = mutableListOf<VideoItem>()
+    private val selectedVideos = mutableListOf<VideoItem>()
+    private var isCompareMode = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -60,13 +64,35 @@ class VideoGalleryActivity : AppCompatActivity() {
     private fun setupUI() {
         recyclerView = findViewById(R.id.recycler_view)
         emptyView = findViewById(R.id.empty_view)
+        compareButton = findViewById(R.id.compareButton)
+        cancelCompareButton = findViewById(R.id.cancelCompareButton)
+        val startCompareButton = findViewById<android.widget.Button>(R.id.startCompareButton)
+        val compareControls = findViewById<android.view.View>(R.id.compareControls)
+        val compareInstructions = findViewById<android.widget.TextView>(R.id.compareInstructions)
         
-        adapter = VideoAdapter(videos) { videoItem ->
-            playVideo(videoItem.uri)
+        adapter = VideoAdapter(videos, isCompareMode, selectedVideos) { videoItem, isSelected ->
+            if (isCompareMode) {
+                handleVideoSelection(videoItem, isSelected, startCompareButton, compareInstructions)
+            } else {
+                playVideo(videoItem.uri)
+            }
         }
         
         recyclerView.layoutManager = GridLayoutManager(this, 2)
         recyclerView.adapter = adapter
+        
+        // Setup compare mode controls
+        compareButton.setOnClickListener {
+            enterCompareMode(compareControls)
+        }
+        
+        cancelCompareButton.setOnClickListener {
+            exitCompareMode(compareControls)
+        }
+        
+        startCompareButton.setOnClickListener {
+            startVideoComparison()
+        }
     }
     
     private fun loadVideos() {
@@ -177,6 +203,64 @@ class VideoGalleryActivity : AppCompatActivity() {
         }
     }
     
+    private fun enterCompareMode(compareControls: android.view.View) {
+        isCompareMode = true
+        selectedVideos.clear()
+        compareControls.visibility = android.view.View.VISIBLE
+        compareButton.visibility = android.view.View.GONE
+        adapter.updateCompareMode(true)
+        supportActionBar?.title = "Select Videos to Compare"
+    }
+    
+    private fun exitCompareMode(compareControls: android.view.View) {
+        isCompareMode = false
+        selectedVideos.clear()
+        compareControls.visibility = android.view.View.GONE
+        compareButton.visibility = android.view.View.VISIBLE
+        adapter.updateCompareMode(false)
+        supportActionBar?.title = "Video Gallery"
+    }
+    
+    private fun handleVideoSelection(videoItem: VideoItem, isSelected: Boolean, startCompareButton: android.widget.Button, compareInstructions: android.widget.TextView) {
+        if (isSelected) {
+            if (selectedVideos.size < 2 && !selectedVideos.contains(videoItem)) {
+                selectedVideos.add(videoItem)
+            }
+        } else {
+            selectedVideos.remove(videoItem)
+        }
+        
+        // Update UI based on selection count
+        when (selectedVideos.size) {
+            0 -> {
+                compareInstructions.text = "Select 2 videos to compare"
+                startCompareButton.isEnabled = false
+            }
+            1 -> {
+                compareInstructions.text = "Select 1 more video"
+                startCompareButton.isEnabled = false
+            }
+            2 -> {
+                compareInstructions.text = "Ready to compare!"
+                startCompareButton.isEnabled = true
+            }
+        }
+        
+        adapter.notifyDataSetChanged()
+    }
+    
+    private fun startVideoComparison() {
+        if (selectedVideos.size == 2) {
+            val intent = Intent(this, VideoComparisonActivity::class.java).apply {
+                putExtra(VideoComparisonActivity.EXTRA_VIDEO1_URI, selectedVideos[0].uri.toString())
+                putExtra(VideoComparisonActivity.EXTRA_VIDEO1_NAME, selectedVideos[0].displayName)
+                putExtra(VideoComparisonActivity.EXTRA_VIDEO2_URI, selectedVideos[1].uri.toString())
+                putExtra(VideoComparisonActivity.EXTRA_VIDEO2_NAME, selectedVideos[1].displayName)
+            }
+            startActivity(intent)
+        }
+    }
+
     override fun onResume() {
         super.onResume()
         // Refresh the list in case videos were deleted/added
@@ -186,7 +270,9 @@ class VideoGalleryActivity : AppCompatActivity() {
 
 class VideoAdapter(
     private val videos: List<VideoItem>,
-    private val onVideoClick: (VideoItem) -> Unit
+    private var isCompareMode: Boolean,
+    private val selectedVideos: MutableList<VideoItem>,
+    private val onVideoClick: (VideoItem, Boolean) -> Unit
 ) : RecyclerView.Adapter<VideoAdapter.VideoViewHolder>() {
     
     class VideoViewHolder(view: View) : RecyclerView.ViewHolder(view) {
@@ -194,6 +280,13 @@ class VideoAdapter(
         val title: TextView = view.findViewById(R.id.video_title)
         val duration: TextView = view.findViewById(R.id.video_duration)
         val date: TextView = view.findViewById(R.id.video_date)
+        val selectionOverlay: View = view.findViewById(R.id.selectionOverlay)
+        val selectionCheckbox: android.widget.CheckBox = view.findViewById(R.id.selectionCheckbox)
+    }
+    
+    fun updateCompareMode(compareMode: Boolean) {
+        isCompareMode = compareMode
+        notifyDataSetChanged()
     }
     
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VideoViewHolder {
@@ -218,8 +311,39 @@ class VideoAdapter(
                 .error(R.drawable.ic_launcher_foreground))
             .into(holder.thumbnail)
         
-        holder.itemView.setOnClickListener {
-            onVideoClick(video)
+        // Handle compare mode UI
+        if (isCompareMode) {
+            holder.selectionCheckbox.visibility = View.VISIBLE
+            val isSelected = selectedVideos.contains(video)
+            holder.selectionCheckbox.isChecked = isSelected
+            holder.selectionOverlay.visibility = if (isSelected) View.VISIBLE else View.GONE
+            
+            // Disable selection if 2 videos already selected and this isn't one of them
+            val canSelect = selectedVideos.size < 2 || selectedVideos.contains(video)
+            holder.selectionCheckbox.isEnabled = canSelect
+            holder.itemView.alpha = if (canSelect) 1.0f else 0.5f
+            
+            holder.itemView.setOnClickListener {
+                if (canSelect) {
+                    val newSelectionState = !selectedVideos.contains(video)
+                    onVideoClick(video, newSelectionState)
+                }
+            }
+            
+            holder.selectionCheckbox.setOnClickListener {
+                if (canSelect) {
+                    val newSelectionState = holder.selectionCheckbox.isChecked
+                    onVideoClick(video, newSelectionState)
+                }
+            }
+        } else {
+            holder.selectionCheckbox.visibility = View.GONE
+            holder.selectionOverlay.visibility = View.GONE
+            holder.itemView.alpha = 1.0f
+            
+            holder.itemView.setOnClickListener {
+                onVideoClick(video, false) // isSelected not used in normal mode
+            }
         }
     }
     

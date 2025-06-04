@@ -107,11 +107,17 @@ class PoseDetectionProcessor(
         val avgConfidence = if (riderCurrentlyDetected) {
             pose.allPoseLandmarks.map { it.inFrameLikelihood }.average()
         } else 0.0
+        
+        // Apply sensitivity threshold from settings
+        val sensitivityThreshold = settingsManager.getDetectionSensitivityThreshold()
+        val riderDetectedWithThreshold = riderCurrentlyDetected && avgConfidence > sensitivityThreshold
+        
+        Log.d(TAG, "Detection: poses=${pose.allPoseLandmarks.size}, confidence=${avgConfidence}, threshold=${sensitivityThreshold}, detected=${riderDetectedWithThreshold}")
 
-        // Update UI with detection status
-        callback?.onUpdateUI(riderCurrentlyDetected, avgConfidence)
+        // Update UI with detection status (show actual confidence but use threshold for detection)
+        callback?.onUpdateUI(riderDetectedWithThreshold, avgConfidence)
 
-        handleRiderDetection(riderCurrentlyDetected, currentTime)
+        handleRiderDetection(riderDetectedWithThreshold, currentTime)
         handleRecordingLogic(currentTime)
     }
 

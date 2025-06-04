@@ -23,6 +23,24 @@
                 android:layout_height="match_parent"
                 android:scaleType="centerCrop"
                 android:background="#333333" />
+                
+            <!-- Selection overlay -->
+            <View
+                android:id="@+id/selectionOverlay"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="#88FF4444"
+                android:visibility="gone" />
+                
+            <!-- Selection checkbox -->
+            <CheckBox
+                android:id="@+id/selectionCheckbox"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="top|end"
+                android:layout_margin="8dp"
+                android:visibility="gone"
+                android:buttonTint="#FF4444" />
 
             <TextView
                 android:id="@+id/video_duration"
