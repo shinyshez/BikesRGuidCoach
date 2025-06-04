@@ -10,7 +10,11 @@ class UIStateManager(
     private val statusIndicator: View,
     private val statusText: TextView,
     private val recordingStatus: TextView,
-    private val recordingOverlay: TextView
+    private val recordingOverlay: View,
+    private val confidenceText: TextView? = null,
+    private val pulseRing: View? = null,
+    private val recordingProgress: android.widget.ProgressBar? = null,
+    private val recordingDot: View? = null
 ) {
     companion object {
         private const val TAG = "UIStateManager"
@@ -37,8 +41,23 @@ class UIStateManager(
                 if (currentState != AppState.RECORDING) {
                     updateState(AppState.RIDER_DETECTED)
                     statusIndicator.backgroundTintList = ContextCompat.getColorStateList(context, android.R.color.holo_green_light)
-                    statusText.text = String.format("Rider Detected (%.1f%%)", confidence * 100)
+                    statusText.text = "Rider Detected"
+                    confidenceText?.text = String.format("%.1f%% confidence", confidence * 100)
                     recordingStatus.text = "Ready to record"
+                    
+                    // Show pulse animation
+                    pulseRing?.visibility = View.VISIBLE
+                    pulseRing?.animate()
+                        ?.scaleX(1.2f)
+                        ?.scaleY(1.2f)
+                        ?.alpha(0.0f)
+                        ?.setDuration(1000)
+                        ?.withEndAction {
+                            pulseRing?.scaleX = 1.0f
+                            pulseRing?.scaleY = 1.0f
+                            pulseRing?.alpha = 0.3f
+                        }
+                        ?.start()
                 }
             }
             else -> {
@@ -46,7 +65,9 @@ class UIStateManager(
                     updateState(AppState.MONITORING)
                     statusIndicator.backgroundTintList = ContextCompat.getColorStateList(context, android.R.color.holo_orange_light)
                     statusText.text = "Monitoring"
+                    confidenceText?.text = ""
                     recordingStatus.text = "Waiting for rider..."
+                    pulseRing?.visibility = View.GONE
                 }
             }
         }
@@ -55,33 +76,74 @@ class UIStateManager(
     fun updateRecordingStarted() {
         updateState(AppState.RECORDING)
         recordingOverlay.visibility = View.VISIBLE
+        recordingProgress?.visibility = View.VISIBLE
+        recordingProgress?.progress = 0
+        
         statusIndicator.setBackgroundResource(R.drawable.circle_indicator)
         statusIndicator.backgroundTintList = ContextCompat.getColorStateList(context, android.R.color.holo_red_light)
         statusText.text = "Recording"
+        confidenceText?.text = ""
         recordingStatus.text = "Recording: 0.0s / 8.0s"
+        pulseRing?.visibility = View.GONE
+        
+        // Animate recording dot
+        recordingDot?.animate()
+            ?.alpha(0.3f)
+            ?.setDuration(500)
+            ?.withEndAction {
+                recordingDot?.animate()
+                    ?.alpha(1.0f)
+                    ?.setDuration(500)
+                    ?.withEndAction { animateRecordingDot() }
+                    ?.start()
+            }
+            ?.start()
+    }
+    
+    private fun animateRecordingDot() {
+        if (currentState == AppState.RECORDING) {
+            recordingDot?.animate()
+                ?.alpha(0.3f)
+                ?.setDuration(500)
+                ?.withEndAction {
+                    recordingDot?.animate()
+                        ?.alpha(1.0f)
+                        ?.setDuration(500)
+                        ?.withEndAction { animateRecordingDot() }
+                        ?.start()
+                }
+                ?.start()
+        }
     }
 
     fun updateRecordingProgress(elapsedMs: Long, maxDurationMs: Long = 8000L) {
         if (currentState == AppState.RECORDING) {
             val seconds = elapsedMs / 1000
             val tenths = (elapsedMs % 1000) / 100
+            val progress = ((elapsedMs.toFloat() / maxDurationMs) * 100).toInt()
+            
             recordingStatus.text = String.format(
                 "Recording: %d.%ds / %.1fs", 
                 seconds, 
                 tenths, 
                 maxDurationMs / 1000.0
             )
+            
+            recordingProgress?.progress = progress
         }
     }
 
     fun updateRecordingFinished(success: Boolean, message: String? = null) {
         recordingOverlay.visibility = View.GONE
+        recordingProgress?.visibility = View.GONE
+        recordingDot?.clearAnimation()
         
         if (success) {
             updateState(AppState.SAVING)
             recordingStatus.text = message ?: "Video saved!"
             statusIndicator.backgroundTintList = ContextCompat.getColorStateList(context, android.R.color.holo_green_light)
             statusText.text = "Video saved"
+            confidenceText?.text = "Success!"
             
             // Auto-reset to monitoring after delay
             statusIndicator.postDelayed({
@@ -93,7 +155,8 @@ class UIStateManager(
             updateState(AppState.ERROR)
             recordingStatus.text = message ?: "Recording failed"
             statusIndicator.backgroundTintList = ContextCompat.getColorStateList(context, android.R.color.holo_red_light)
-            statusText.text = message ?: "Recording error"
+            statusText.text = "Error"
+            confidenceText?.text = "Failed"
             
             // Auto-reset to monitoring after error display
             statusIndicator.postDelayed({
@@ -123,8 +186,12 @@ class UIStateManager(
         updateState(AppState.MONITORING)
         statusIndicator.backgroundTintList = ContextCompat.getColorStateList(context, android.R.color.holo_orange_light)
         statusText.text = "Monitoring"
+        confidenceText?.text = ""
         recordingStatus.text = "Waiting for rider..."
         recordingOverlay.visibility = View.GONE
+        recordingProgress?.visibility = View.GONE
+        pulseRing?.visibility = View.GONE
+        recordingDot?.clearAnimation()
     }
 
     private fun updateState(newState: AppState) {

@@ -56,6 +56,16 @@ dependencies {
 
     // Lifecycle
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
+    
+    // Preferences
+    implementation("androidx.preference:preference-ktx:1.2.1")
+    
+    // RecyclerView for gallery
+    implementation("androidx.recyclerview:recyclerview:1.3.2")
+    implementation("androidx.cardview:cardview:1.0.0")
+    
+    // Glide for image loading
+    implementation("com.github.bumptech.glide:glide:4.16.0")
 
     // Testing
     testImplementation("junit:junit:4.13.2")

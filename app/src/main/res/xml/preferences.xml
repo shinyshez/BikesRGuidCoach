@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory android:title="Recording Settings">
+
+        <SeekBarPreference
+            android:key="recording_duration"
+            android:title="Recording Duration"
+            android:summary="How long to record when rider is detected"
+            android:defaultValue="8"
+            android:max="30"
+            android:min="3"
+            app:showSeekBarValue="true"
+            app:seekBarIncrement="1" />
+
+        <SeekBarPreference
+            android:key="detection_sensitivity"
+            android:title="Detection Sensitivity"
+            android:summary="How sensitive pose detection should be"
+            android:defaultValue="70"
+            android:max="100"
+            android:min="30"
+            app:showSeekBarValue="true"
+            app:seekBarIncrement="5" />
+
+        <SeekBarPreference
+            android:key="post_rider_delay"
+            android:title="Post-Rider Delay"
+            android:summary="Continue recording after rider leaves (seconds)"
+            android:defaultValue="2"
+            android:max="10"
+            android:min="0"
+            app:showSeekBarValue="true"
+            app:seekBarIncrement="1" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="Feedback">
+
+        <SwitchPreferenceCompat
+            android:key="haptic_feedback"
+            android:title="Haptic Feedback"
+            android:summary="Vibrate when recording starts/stops"
+            android:defaultValue="true" />
+
+        <SwitchPreferenceCompat
+            android:key="sound_feedback"
+            android:title="Sound Feedback"
+            android:summary="Play sounds for recording events"
+            android:defaultValue="false" />
+
+        <SwitchPreferenceCompat
+            android:key="show_pose_overlay"
+            android:title="Show Pose Overlay"
+            android:summary="Display detected pose skeleton"
+            android:defaultValue="true" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="Storage">
+
+        <Preference
+            android:key="storage_location"
+            android:title="Storage Location"
+            android:summary="Movies/MTBAnalyzer"
+            android:selectable="false" />
+
+        <Preference
+            android:key="clear_cache"
+            android:title="Clear Video Cache"
+            android:summary="Remove all recorded videos" />
+
+    </PreferenceCategory>
+
+</PreferenceScreen>

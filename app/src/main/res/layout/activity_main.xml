@@ -13,7 +13,7 @@
         android:id="@+id/viewFinder"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/topStatusBar"
         app:layout_constraintBottom_toTopOf="@+id/controlPanel"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
@@ -24,38 +24,54 @@
         android:id="@+id/graphicOverlay"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        app:layout_constraintTop_toTopOf="@+id/viewFinder"
-        app:layout_constraintBottom_toBottomOf="@+id/viewFinder"
-        app:layout_constraintStart_toStartOf="@+id/viewFinder"
-        app:layout_constraintEnd_toEndOf="@+id/viewFinder" />
+        app:layout_constraintTop_toBottomOf="@+id/topStatusBar"
+        app:layout_constraintBottom_toTopOf="@+id/controlPanel"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
 
-    <!-- Control Panel -->
+    <!-- Enhanced Control Panel -->
     <LinearLayout
         android:id="@+id/controlPanel"
         android:layout_width="0dp"
-        android:layout_height="120dp"
+        android:layout_height="140dp"
         android:orientation="horizontal"
         android:gravity="center"
-        android:background="@android:color/black"
-        android:alpha="0.8"
+        android:background="#E6000000"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <!-- Status Indicator -->
+        <!-- Enhanced Status Indicator -->
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:orientation="vertical"
-            android:gravity="center">
+            android:gravity="center"
+            android:padding="8dp">
             
-            <View
-                android:id="@+id/statusIndicator"
-                android:layout_width="20dp"
-                android:layout_height="20dp"
-                android:background="@drawable/circle_indicator"
-                android:backgroundTint="@android:color/holo_red_light" />
+            <FrameLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content">
+                
+                <View
+                    android:id="@+id/statusIndicator"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:background="@drawable/circle_indicator"
+                    android:backgroundTint="@android:color/holo_orange_light" />
+                    
+                <!-- Pulse animation ring for rider detection -->
+                <View
+                    android:id="@+id/pulseRing"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_gravity="center"
+                    android:background="@drawable/circle_indicator"
+                    android:backgroundTint="@android:color/holo_green_light"
+                    android:alpha="0.3"
+                    android:visibility="gone" />
+            </FrameLayout>
             
             <TextView
                 android:id="@+id/statusText"
@@ -63,17 +79,28 @@
                 android:layout_height="wrap_content"
                 android:text="Monitoring"
                 android:textColor="@android:color/white"
-                android:textSize="12sp"
-                android:layout_marginTop="4dp" />
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:layout_marginTop="6dp" />
+                
+            <TextView
+                android:id="@+id/confidenceText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text=""
+                android:textColor="@android:color/holo_green_light"
+                android:textSize="11sp"
+                android:layout_marginTop="2dp" />
         </LinearLayout>
 
-        <!-- Recording Info -->
+        <!-- Enhanced Recording Info -->
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="2"
             android:orientation="vertical"
-            android:gravity="center">
+            android:gravity="center"
+            android:padding="8dp">
             
             <TextView
                 android:id="@+id/recordingStatus"
@@ -81,54 +108,138 @@
                 android:layout_height="wrap_content"
                 android:text="Waiting for rider..."
                 android:textColor="@android:color/white"
-                android:textSize="16sp"
-                android:textStyle="bold" />
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:gravity="center" />
+                
+            <ProgressBar
+                android:id="@+id/recordingProgress"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="120dp"
+                android:layout_height="8dp"
+                android:layout_marginTop="8dp"
+                android:max="100"
+                android:progress="0"
+                android:progressTint="@android:color/holo_red_light"
+                android:visibility="gone" />
             
             <TextView
                 android:id="@+id/segmentCount"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="0 segments recorded"
+                android:text="0 videos recorded today"
                 android:textColor="@android:color/holo_green_light"
+                android:textSize="13sp"
+                android:layout_marginTop="4dp" />
+        </LinearLayout>
+
+        <!-- Action Buttons -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:padding="8dp">
+            
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center">
+                
+                <ImageButton
+                    android:id="@+id/galleryButton"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_marginEnd="8dp"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:src="@android:drawable/ic_menu_gallery"
+                    app:tint="@android:color/white"
+                    android:contentDescription="Gallery" />
+                    
+                <ImageButton
+                    android:id="@+id/settingsButton"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:src="@android:drawable/ic_menu_preferences"
+                    app:tint="@android:color/white"
+                    android:contentDescription="Settings" />
+            </LinearLayout>
+            
+            <Button
+                android:id="@+id/testRecordButton"
+                android:layout_width="wrap_content"
+                android:layout_height="32dp"
+                android:text="Manual"
                 android:textSize="12sp"
                 android:layout_marginTop="4dp" />
         </LinearLayout>
 
-        <!-- Settings Button -->
-        <ImageButton
-            android:id="@+id/settingsButton"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_marginEnd="16dp"
-            android:background="?android:attr/selectableItemBackgroundBorderless"
-            android:src="@android:drawable/ic_menu_preferences"
-            app:tint="@android:color/white"
-            android:contentDescription="Settings" />
-            
-        <!-- Test Record Button -->
-        <Button
-            android:id="@+id/testRecordButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Test Record"
-            android:layout_marginEnd="16dp" />
-
     </LinearLayout>
 
-    <!-- Recording Overlay (shown when recording) -->
-    <TextView
+    <!-- Enhanced Recording Overlay -->
+    <LinearLayout
         android:id="@+id/recordingOverlay"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="● REC"
-        android:textColor="@android:color/holo_red_light"
-        android:textSize="18sp"
-        android:textStyle="bold"
-        android:background="@android:color/black"
-        android:padding="8dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="#CC000000"
+        android:padding="12dp"
         android:visibility="gone"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        android:layout_margin="16dp" />
+        android:layout_margin="16dp">
+        
+        <View
+            android:id="@+id/recordingDot"
+            android:layout_width="12dp"
+            android:layout_height="12dp"
+            android:background="@drawable/circle_indicator"
+            android:backgroundTint="@android:color/holo_red_light"
+            android:layout_marginEnd="8dp" />
+            
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="REC"
+            android:textColor="@android:color/white"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+    
+    <!-- Top status bar -->
+    <LinearLayout
+        android:id="@+id/topStatusBar"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="#80000000"
+        android:padding="12dp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+        
+        <TextView
+            android:id="@+id/appTitle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="MTB Analyzer"
+            android:textColor="@android:color/white"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+            
+        <TextView
+            android:id="@+id/timeDisplay"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textColor="@android:color/white"
+            android:textSize="14sp" />
+    </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

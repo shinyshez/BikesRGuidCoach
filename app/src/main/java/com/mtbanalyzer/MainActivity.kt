@@ -38,7 +38,13 @@ class MainActivity : AppCompatActivity(),
     private lateinit var statusIndicator: View
     private lateinit var statusText: TextView
     private lateinit var recordingStatus: TextView
-    private lateinit var recordingOverlay: TextView
+    private lateinit var recordingOverlay: View
+    private lateinit var confidenceText: TextView
+    private lateinit var pulseRing: View
+    private lateinit var recordingProgress: android.widget.ProgressBar
+    private lateinit var recordingDot: View
+    private lateinit var segmentCount: TextView
+    private lateinit var timeDisplay: TextView
 
     companion object {
         private const val TAG = "MTBAnalyzer"
@@ -67,6 +73,24 @@ class MainActivity : AppCompatActivity(),
             statusText = findViewById(R.id.statusText)
             recordingStatus = findViewById(R.id.recordingStatus)
             recordingOverlay = findViewById(R.id.recordingOverlay)
+            confidenceText = findViewById(R.id.confidenceText)
+            pulseRing = findViewById(R.id.pulseRing)
+            recordingProgress = findViewById(R.id.recordingProgress)
+            recordingDot = findViewById(R.id.recordingDot)
+            segmentCount = findViewById(R.id.segmentCount)
+            timeDisplay = findViewById(R.id.timeDisplay)
+            
+            // Initialize navigation buttons
+            findViewById<android.widget.ImageButton>(R.id.settingsButton).setOnClickListener {
+                startActivity(android.content.Intent(this, SettingsActivity::class.java))
+            }
+            
+            findViewById<android.widget.ImageButton>(R.id.galleryButton).setOnClickListener {
+                startActivity(android.content.Intent(this, VideoGalleryActivity::class.java))
+            }
+            
+            // Update time display
+            updateTimeDisplay()
             
             // Test button for manual recording
             findViewById<android.widget.Button>(R.id.testRecordButton).setOnClickListener {
@@ -105,11 +129,21 @@ class MainActivity : AppCompatActivity(),
         recordingManager = RecordingManager(this, contentResolver)
         poseDetectionProcessor = PoseDetectionProcessor(poseDetector, graphicOverlay)
         uiStateManager = UIStateManager(
-            this, statusIndicator, statusText, recordingStatus, recordingOverlay
+            this, statusIndicator, statusText, recordingStatus, recordingOverlay,
+            confidenceText, pulseRing, recordingProgress, recordingDot
         )
         
         // Set callbacks
         poseDetectionProcessor.setCallback(this)
+    }
+    
+    private fun updateTimeDisplay() {
+        val currentTime = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+            .format(java.util.Date())
+        timeDisplay.text = currentTime
+        
+        // Update every minute
+        timeDisplay.postDelayed({ updateTimeDisplay() }, 60000)
     }
 
     private fun startCamera() {
