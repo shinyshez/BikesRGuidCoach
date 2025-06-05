@@ -2,6 +2,8 @@ package com.mtbanalyzer
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.content.SharedPreferences
+import android.graphics.Matrix
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
@@ -13,9 +15,8 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.view.PreviewView
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import com.google.mlkit.vision.pose.PoseDetection
-import com.google.mlkit.vision.pose.PoseDetector
-import com.google.mlkit.vision.pose.defaults.PoseDetectorOptions
+import androidx.preference.PreferenceManager
+import com.mtbanalyzer.detector.RiderDetectorManager
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.Calendar
@@ -23,18 +24,19 @@ import java.util.Calendar
 class MainActivity : AppCompatActivity(), 
     CameraManager.CameraCallback,
     RecordingManager.RecordingCallback,
-    PoseDetectionProcessor.PoseDetectionCallback {
+    RiderDetectionProcessor.RiderDetectionCallback,
+    SharedPreferences.OnSharedPreferenceChangeListener {
 
     private lateinit var viewFinder: PreviewView
     private lateinit var graphicOverlay: GraphicOverlay
     private lateinit var cameraExecutor: ExecutorService
-    private lateinit var poseDetector: PoseDetector
-    
     // New architecture components
     private lateinit var cameraManager: CameraManager
     private lateinit var recordingManager: RecordingManager
-    private lateinit var poseDetectionProcessor: PoseDetectionProcessor
+    private lateinit var riderDetectionProcessor: RiderDetectionProcessor
+    private lateinit var riderDetectorManager: RiderDetectorManager
     private lateinit var uiStateManager: UIStateManager
+    private lateinit var settingsManager: SettingsManager
     
     // UI elements
     private lateinit var statusIndicator: View
@@ -102,11 +104,7 @@ class MainActivity : AppCompatActivity(),
                 manualStartRecording()
             }
 
-            // Initialize pose detector for rider detection
-            val options = PoseDetectorOptions.Builder()
-                .setDetectorMode(PoseDetectorOptions.STREAM_MODE)
-                .build()
-            poseDetector = PoseDetection.getClient(options)
+            // Initialize rider detection system
 
             cameraExecutor = Executors.newSingleThreadExecutor()
             
@@ -130,17 +128,28 @@ class MainActivity : AppCompatActivity(),
     }
 
     private fun initializeComponents() {
-        val settingsManager = SettingsManager(this)
+        settingsManager = SettingsManager(this)
         cameraManager = CameraManager(this, this, cameraExecutor)
         recordingManager = RecordingManager(this, contentResolver)
-        poseDetectionProcessor = PoseDetectionProcessor(poseDetector, graphicOverlay, settingsManager)
+        
+        // Initialize rider detection system
+        riderDetectorManager = RiderDetectorManager(this, settingsManager)
+        riderDetectorManager.initialize()
+        
+        riderDetectionProcessor = RiderDetectionProcessor(
+            riderDetectorManager, graphicOverlay, settingsManager
+        )
+        
         uiStateManager = UIStateManager(
             this, statusIndicator, statusText, recordingStatus, recordingOverlay,
             confidenceText, pulseRing, recordingProgress, recordingDot
         )
         
         // Set callbacks
-        poseDetectionProcessor.setCallback(this)
+        riderDetectionProcessor.setCallback(this)
+        
+        // Listen for settings changes
+        settingsManager.registerChangeListener(this)
     }
     
     private fun updateTimeDisplay() {
@@ -193,7 +202,17 @@ class MainActivity : AppCompatActivity(),
     }
 
     private fun startCamera() {
-        cameraManager.startCamera(viewFinder, graphicOverlay, poseDetectionProcessor, this)
+        cameraManager.startCamera(viewFinder, graphicOverlay, riderDetectionProcessor, this)
+        
+        // After camera starts, monitor for preview bounds
+        viewFinder.viewTreeObserver.addOnGlobalLayoutListener {
+            updatePreviewBounds()
+        }
+    }
+    
+    private fun updatePreviewBounds() {
+        // Preview bounds are now correctly calculated and set by CameraManager
+        // This method is no longer needed but kept for potential future use
     }
 
     // CameraManager.CameraCallback implementation
@@ -212,8 +231,8 @@ class MainActivity : AppCompatActivity(),
     override fun onRecordingStarted() {
         runOnUiThread {
             uiStateManager.updateRecordingStarted()
-            // Notify pose processor that recording has actually started
-            poseDetectionProcessor.setRecordingStarted()
+            // Notify rider detection processor that recording has actually started
+            riderDetectionProcessor.setRecordingStarted()
         }
     }
 
@@ -226,8 +245,8 @@ class MainActivity : AppCompatActivity(),
             } else {
                 uiStateManager.updateRecordingFinished(false, error ?: "Recording failed")
             }
-            // Notify pose processor that recording has stopped
-            poseDetectionProcessor.setRecordingStopped()
+            // Notify rider detection processor that recording has stopped
+            riderDetectionProcessor.setRecordingStopped()
         }
     }
 
@@ -237,16 +256,16 @@ class MainActivity : AppCompatActivity(),
         }
     }
 
-    // PoseDetectionProcessor.PoseDetectionCallback implementation
-    override fun onRiderDetected(confidence: Double) {
-        Log.d(TAG, "Rider detected with confidence: $confidence")
+    // RiderDetectionProcessor.RiderDetectionCallback implementation
+    override fun onRiderDetected(confidence: Double, debugInfo: String) {
+        Log.d(TAG, "Rider detected with confidence: $confidence, debug: $debugInfo")
     }
 
     override fun onRiderLost() {
         Log.d(TAG, "Rider lost")
     }
 
-    override fun onUpdateUI(riderDetected: Boolean, confidence: Double) {
+    override fun onUpdateUI(riderDetected: Boolean, confidence: Double, debugInfo: String) {
         runOnUiThread {
             uiStateManager.updateDetectionState(
                 riderDetected, 
@@ -318,12 +337,35 @@ class MainActivity : AppCompatActivity(),
         updateVideoCount()
     }
     
+    // SharedPreferences.OnSharedPreferenceChangeListener implementation
+    override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
+        when (key) {
+            "detector_type" -> {
+                val detectorType = settingsManager.getDetectorType()
+                Log.d(TAG, "Detector type changed to: $detectorType")
+                riderDetectionProcessor.switchDetector(detectorType)
+                Toast.makeText(this, "Switched to ${getDetectorDisplayName(detectorType)}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+    
+    private fun getDetectorDisplayName(detectorType: String): String {
+        return when(detectorType) {
+            "pose" -> "ML Kit Pose Detection"
+            "motion" -> "Motion Detection"
+            "optical_flow" -> "Optical Flow Detection"
+            "hybrid" -> "Hybrid Detection"
+            else -> "Unknown Detector"
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
+        settingsManager.unregisterChangeListener(this)
         recordingManager.release()
         cameraManager.release()
-        poseDetectionProcessor.release()
+        riderDetectionProcessor.release()
+        riderDetectorManager.release()
         cameraExecutor.shutdown()
-        poseDetector.close()
     }
 }

@@ -72,6 +72,61 @@ class CameraManager(
                 previewView.height,
                 GraphicOverlay.CameraFacing.BACK
             )
+            
+            // Debug: Get actual preview resolution
+            preview?.resolutionInfo?.let { info ->
+                Log.d(TAG, "Preview resolution: ${info.resolution.width}x${info.resolution.height}, rotation: ${info.rotationDegrees}")
+                
+                // Calculate where the preview actually appears within the view
+                val previewWidth = info.resolution.width
+                val previewHeight = info.resolution.height
+                val viewWidth = previewView.width
+                val viewHeight = previewView.height
+                
+                // Calculate fitCenter scaling
+                val previewAspectRatio = previewWidth.toFloat() / previewHeight.toFloat()
+                val viewAspectRatio = viewWidth.toFloat() / viewHeight.toFloat()
+                
+                val scaleFactor = if (viewAspectRatio > previewAspectRatio) {
+                    // View is wider than preview, scale by height
+                    viewHeight.toFloat() / previewHeight.toFloat()
+                } else {
+                    // View is taller than preview, scale by width
+                    viewWidth.toFloat() / previewWidth.toFloat()
+                }
+                
+                val scaledPreviewWidth = previewWidth * scaleFactor
+                val scaledPreviewHeight = previewHeight * scaleFactor
+                val previewLeft = (viewWidth - scaledPreviewWidth) / 2
+                val previewTop = (viewHeight - scaledPreviewHeight) / 2
+                
+                Log.d(TAG, "Calculated preview bounds: (${previewLeft}, ${previewTop}) size: ${scaledPreviewWidth}x${scaledPreviewHeight}")
+                Log.d(TAG, "Scale factor: $scaleFactor, view: ${viewWidth}x${viewHeight}")
+                Log.d(TAG, "Preview aspect ratio: $previewAspectRatio")
+                
+                // Set the actual preview resolution for correct aspect ratio calculation
+                if (info.rotationDegrees == 90 || info.rotationDegrees == 270) {
+                    // Rotated - swap dimensions
+                    graphicOverlay.setImageSourceInfo(previewHeight, previewWidth)
+                } else {
+                    graphicOverlay.setImageSourceInfo(previewWidth, previewHeight)
+                }
+                
+                // Set these as the actual preview bounds
+                graphicOverlay.setActualPreviewBounds(
+                    previewLeft, 
+                    previewTop, 
+                    previewLeft + scaledPreviewWidth, 
+                    previewTop + scaledPreviewHeight
+                )
+            }
+            
+            // Debug: Get PreviewView location and dimensions
+            val location = IntArray(2)
+            previewView.getLocationOnScreen(location)
+            Log.d(TAG, "PreviewView location on screen: (${location[0]}, ${location[1]})")
+            Log.d(TAG, "PreviewView dimensions: ${previewView.width}x${previewView.height}")
+            
         }
 
         // Video capture with fallback strategy
