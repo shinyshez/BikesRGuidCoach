@@ -2,7 +2,9 @@
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
-    <PreferenceCategory android:title="Detection Settings">
+    <PreferenceCategory 
+        android:key="detection_category"
+        android:title="Detection Settings">
 
         <SwitchPreferenceCompat
             android:key="rider_detection_enabled"
@@ -32,37 +34,7 @@
 
     </PreferenceCategory>
 
-    <PreferenceCategory 
-        android:title="Motion Detection Settings"
-        android:dependency="rider_detection_enabled">
-
-        <SeekBarPreference
-            android:key="motion_threshold"
-            android:title="Motion Threshold"
-            android:summary="Pixel intensity difference threshold (lower = more sensitive)"
-            android:defaultValue="30"
-            android:max="100"
-            android:min="5"
-            app:showSeekBarValue="true"
-            app:seekBarIncrement="5" />
-
-        <SeekBarPreference
-            android:key="min_motion_area"
-            android:title="Minimum Motion Area"
-            android:summary="Minimum motion pixels to trigger detection"
-            android:defaultValue="5000"
-            android:max="20000"
-            android:min="1000"
-            app:showSeekBarValue="true"
-            app:seekBarIncrement="500" />
-
-        <SwitchPreferenceCompat
-            android:key="show_motion_overlay"
-            android:title="Show Motion Overlay"
-            android:summary="Display red motion detection areas on preview"
-            android:defaultValue="true" />
-
-    </PreferenceCategory>
+    <!-- Dynamic detector settings will be added here programmatically -->
 
     <PreferenceCategory android:title="Recording Settings">
 

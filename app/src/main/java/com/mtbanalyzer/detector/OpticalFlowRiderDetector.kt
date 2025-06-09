@@ -25,6 +25,7 @@ class OpticalFlowRiderDetector : RiderDetector() {
     
     private var previousFrame: Bitmap? = null
     private var previousFeatures: List<FeaturePoint> = emptyList()
+    private var imageScaleFactor = 1.0f
     
     // Configuration parameters
     private var maxFeatureCount = DEFAULT_FEATURE_COUNT
@@ -55,7 +56,12 @@ class OpticalFlowRiderDetector : RiderDetector() {
         
         return withContext(Dispatchers.Default) {
             try {
+                val originalWidth = imageProxy.width
+                val originalHeight = imageProxy.height
                 val currentFrame = imageProxyToGrayscaleBitmap(imageProxy)
+                
+                // Calculate scale factor from original image to processed image
+                imageScaleFactor = originalWidth.toFloat() / currentFrame.width.toFloat()
                 
                 val result = if (previousFrame != null && previousFeatures.isNotEmpty()) {
                     calculateOpticalFlow(previousFrame!!, currentFrame, graphicOverlay)
@@ -116,7 +122,7 @@ class OpticalFlowRiderDetector : RiderDetector() {
         // Draw flow vectors on overlay
         if (showFlowOverlay) {
             graphicOverlay.clear()
-            graphicOverlay.add(OpticalFlowGraphic(graphicOverlay, flowVectors, previousFeatures))
+            graphicOverlay.add(OpticalFlowGraphic(graphicOverlay, flowVectors, previousFeatures, imageScaleFactor))
         }
         
         val debugInfo = "Vectors: ${flowVectors.size}, Features: ${previousFeatures.size}, AvgMag: %.1f".format(
@@ -451,7 +457,8 @@ class OpticalFlowRiderDetector : RiderDetector() {
     private class OpticalFlowGraphic(
         overlay: GraphicOverlay,
         private val flowVectors: List<FlowVector>,
-        private val features: List<FeaturePoint>
+        private val features: List<FeaturePoint>,
+        private val scaleFactor: Float
     ) : GraphicOverlay.Graphic(overlay) {
         
         private val vectorPaint = Paint().apply {
@@ -469,10 +476,11 @@ class OpticalFlowRiderDetector : RiderDetector() {
         override fun draw(canvas: Canvas) {
             // Draw flow vectors
             for (vector in flowVectors) {
-                val startX = translateX(vector.startPoint.x)
-                val startY = translateY(vector.startPoint.y)
-                val endX = translateX(vector.endPoint.x)
-                val endY = translateY(vector.endPoint.y)
+                // Scale coordinates back to original image space before overlay transformation
+                val startX = translateX(vector.startPoint.x * scaleFactor)
+                val startY = translateY(vector.startPoint.y * scaleFactor)
+                val endX = translateX(vector.endPoint.x * scaleFactor)
+                val endY = translateY(vector.endPoint.y * scaleFactor)
                 
                 canvas.drawLine(startX, startY, endX, endY, vectorPaint)
                 
@@ -492,8 +500,9 @@ class OpticalFlowRiderDetector : RiderDetector() {
             
             // Draw feature points
             for (feature in features) {
-                val x = translateX(feature.x)
-                val y = translateY(feature.y)
+                // Scale coordinates back to original image space before overlay transformation
+                val x = translateX(feature.x * scaleFactor)
+                val y = translateY(feature.y * scaleFactor)
                 canvas.drawCircle(x, y, 3f, featurePaint)
             }
         }

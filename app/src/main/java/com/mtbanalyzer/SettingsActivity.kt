@@ -12,6 +12,10 @@ import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.SeekBarPreference
 import androidx.preference.SwitchPreferenceCompat
 import androidx.preference.ListPreference
+import androidx.preference.PreferenceCategory
+import androidx.preference.Preference
+import com.mtbanalyzer.detector.RiderDetectorManager
+import com.mtbanalyzer.detector.RiderDetector.ConfigType
 
 class SettingsActivity : AppCompatActivity() {
 
@@ -36,8 +40,29 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     class SettingsFragment : PreferenceFragmentCompat() {
+        private lateinit var settingsManager: SettingsManager
+        private lateinit var detectorManager: RiderDetectorManager
+        private var detectorConfigCategory: PreferenceCategory? = null
+        
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
             setPreferencesFromResource(R.xml.preferences, rootKey)
+            
+            // Initialize managers
+            settingsManager = SettingsManager(requireContext())
+            detectorManager = RiderDetectorManager(requireContext(), settingsManager)
+            detectorManager.initialize()
+            
+            // Create detector config category
+            detectorConfigCategory = PreferenceCategory(requireContext()).apply {
+                title = "Detector Settings"
+                dependency = "rider_detection_enabled"
+            }
+            
+            // Add it to the screen
+            preferenceScreen.addPreference(detectorConfigCategory!!)
+            
+            // Load initial detector config
+            loadDetectorConfig()
             
             // Set up preference listeners
             findPreference<SwitchPreferenceCompat>("rider_detection_enabled")?.setOnPreferenceChangeListener { _, newValue ->
@@ -55,6 +80,11 @@ class SettingsActivity : AppCompatActivity() {
                     "hybrid" -> "Hybrid Detection"
                     else -> "Unknown"
                 }
+                
+                // Switch detector and reload config
+                detectorManager.switchDetector(detectorType)
+                loadDetectorConfig()
+                
                 Toast.makeText(context, "Detection method: $detectorName", Toast.LENGTH_SHORT).show()
                 true
             }
@@ -153,6 +183,66 @@ class SettingsActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 Log.e("SettingsFragment", "Error deleting videos", e)
                 Toast.makeText(requireContext(), "Error deleting videos: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+        
+        private fun loadDetectorConfig() {
+            // Clear existing detector config preferences
+            detectorConfigCategory?.removeAll()
+            
+            // Get current detector config options
+            val configOptions = detectorManager.getCurrentDetectorConfigOptions()
+            
+            // Create preferences for each config option
+            for ((key, option) in configOptions) {
+                val preference = when (option.type) {
+                    ConfigType.BOOLEAN -> {
+                        SwitchPreferenceCompat(requireContext()).apply {
+                            this.key = option.key
+                            title = option.displayName
+                            summary = option.description
+                            setDefaultValue(option.defaultValue as? Boolean ?: false)
+                        }
+                    }
+                    ConfigType.INTEGER -> {
+                        SeekBarPreference(requireContext()).apply {
+                            this.key = option.key
+                            title = option.displayName
+                            summary = option.description
+                            setDefaultValue(option.defaultValue as? Int ?: 0)
+                            min = (option.minValue as? Number)?.toInt() ?: 0
+                            max = (option.maxValue as? Number)?.toInt() ?: 100
+                            showSeekBarValue = true
+                            seekBarIncrement = 1
+                        }
+                    }
+                    ConfigType.FLOAT -> {
+                        SeekBarPreference(requireContext()).apply {
+                            this.key = option.key
+                            title = option.displayName
+                            summary = option.description
+                            // Convert float to int by multiplying by 10 for SeekBar
+                            val floatDefault = (option.defaultValue as? Number)?.toDouble() ?: 0.0
+                            setDefaultValue((floatDefault * 10).toInt())
+                            min = ((option.minValue as? Number)?.toDouble() ?: 0.0).let { (it * 10).toInt() }
+                            max = ((option.maxValue as? Number)?.toDouble() ?: 10.0).let { (it * 10).toInt() }
+                            showSeekBarValue = true
+                            seekBarIncrement = 1
+                            summary = "${option.description} (displayed as x10)"
+                        }
+                    }
+                    else -> {
+                        // For STRING and ENUM types, create basic preference for now
+                        Preference(requireContext()).apply {
+                            this.key = option.key
+                            title = option.displayName
+                            summary = option.description
+                            isEnabled = false
+                        }
+                    }
+                }
+                
+                detectorConfigCategory?.addPreference(preference)
             }
         }
     }
