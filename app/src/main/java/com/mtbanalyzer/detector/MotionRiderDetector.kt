@@ -73,13 +73,17 @@ class MotionRiderDetector : RiderDetector() {
         // Sample step size
         val sampleStep = 4
         
-        // Create motion bitmap at sampled resolution
+        // Create motion bitmap at sampled resolution only if we need to show it
         val sampledWidth = (width + sampleStep - 1) / sampleStep
         val sampledHeight = (height + sampleStep - 1) / sampleStep
-        val motionBitmap = Bitmap.createBitmap(sampledWidth, sampledHeight, Bitmap.Config.ARGB_8888)
+        val motionBitmap = if (showMotionOverlay) {
+            Bitmap.createBitmap(sampledWidth, sampledHeight, Bitmap.Config.ARGB_8888)
+        } else {
+            null
+        }
         
         Log.d(TAG, "detectMotion - input frame size: ${width}x${height}, sampleStep: $sampleStep")
-        Log.d(TAG, "detectMotion - creating sampled bitmap: ${sampledWidth}x${sampledHeight}")
+        Log.d(TAG, "detectMotion - creating sampled bitmap: ${sampledWidth}x${sampledHeight}, showOverlay: $showMotionOverlay")
         
         var motionPixelCount = 0
         var motionY = 0
@@ -103,7 +107,7 @@ class MotionRiderDetector : RiderDetector() {
                 
                 if (diff > motionThreshold) {
                     motionPixelCount++
-                    if (showMotionOverlay) {
+                    if (showMotionOverlay && motionBitmap != null) {
                         // Set pixel in motion bitmap
                         motionBitmap.setPixel(motionX, motionY, Color.RED)
                         // Track bounds of motion detection
@@ -124,8 +128,8 @@ class MotionRiderDetector : RiderDetector() {
         }
         
         // Update overlay
-        if (showMotionOverlay) {
-            graphicOverlay.clear()
+        graphicOverlay.clear()
+        if (showMotionOverlay && motionBitmap != null) {
             graphicOverlay.add(MotionGraphic(graphicOverlay, motionBitmap, originalWidth, originalHeight, showGrid = false))
         }
         
@@ -194,7 +198,7 @@ class MotionRiderDetector : RiderDetector() {
     
     override fun configure(settings: Map<String, Any>) {
         motionThreshold = (settings["motion_threshold"] as? Int) ?: DEFAULT_MOTION_THRESHOLD
-        minMotionArea = (settings["min_motion_area"] as? Int) ?: DEFAULT_MIN_MOTION_AREA
+        minMotionArea = (settings["min_motion_area"] as? Int) ?:    DEFAULT_MIN_MOTION_AREA
         blurRadius = (settings["blur_radius"] as? Int) ?: DEFAULT_BLUR_RADIUS
         showMotionOverlay = (settings["show_motion_overlay"] as? Boolean) ?: true
     }

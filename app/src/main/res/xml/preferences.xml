@@ -2,6 +2,68 @@
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
+    <PreferenceCategory android:title="Detection Settings">
+
+        <SwitchPreferenceCompat
+            android:key="rider_detection_enabled"
+            android:title="Enable Rider Detection"
+            android:summary="Turn rider detection on or off"
+            android:defaultValue="true" />
+
+        <ListPreference
+            android:key="detector_type"
+            android:title="Detection Method"
+            android:summary="Choose the rider detection algorithm"
+            android:defaultValue="pose"
+            android:entries="@array/detector_types"
+            android:entryValues="@array/detector_values"
+            android:dependency="rider_detection_enabled" />
+
+        <SeekBarPreference
+            android:key="detection_sensitivity"
+            android:title="Detection Sensitivity"
+            android:summary="How sensitive pose detection should be"
+            android:defaultValue="70"
+            android:max="100"
+            android:min="30"
+            app:showSeekBarValue="true"
+            app:seekBarIncrement="5"
+            android:dependency="rider_detection_enabled" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory 
+        android:title="Motion Detection Settings"
+        android:dependency="rider_detection_enabled">
+
+        <SeekBarPreference
+            android:key="motion_threshold"
+            android:title="Motion Threshold"
+            android:summary="Pixel intensity difference threshold (lower = more sensitive)"
+            android:defaultValue="30"
+            android:max="100"
+            android:min="5"
+            app:showSeekBarValue="true"
+            app:seekBarIncrement="5" />
+
+        <SeekBarPreference
+            android:key="min_motion_area"
+            android:title="Minimum Motion Area"
+            android:summary="Minimum motion pixels to trigger detection"
+            android:defaultValue="5000"
+            android:max="20000"
+            android:min="1000"
+            app:showSeekBarValue="true"
+            app:seekBarIncrement="500" />
+
+        <SwitchPreferenceCompat
+            android:key="show_motion_overlay"
+            android:title="Show Motion Overlay"
+            android:summary="Display red motion detection areas on preview"
+            android:defaultValue="true" />
+
+    </PreferenceCategory>
+
     <PreferenceCategory android:title="Recording Settings">
 
         <SeekBarPreference
@@ -13,16 +75,6 @@
             android:min="3"
             app:showSeekBarValue="true"
             app:seekBarIncrement="1" />
-
-        <SeekBarPreference
-            android:key="detection_sensitivity"
-            android:title="Detection Sensitivity"
-            android:summary="How sensitive pose detection should be"
-            android:defaultValue="70"
-            android:max="100"
-            android:min="30"
-            app:showSeekBarValue="true"
-            app:seekBarIncrement="5" />
 
         <SeekBarPreference
             android:key="post_rider_delay"

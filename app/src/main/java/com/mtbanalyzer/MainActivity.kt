@@ -1,16 +1,20 @@
 package com.mtbanalyzer
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
 import android.content.SharedPreferences
 import android.graphics.Matrix
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
+import android.view.WindowManager
 import android.provider.MediaStore
 import android.util.Log
 import android.view.View
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.widget.SwitchCompat
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.view.PreviewView
 import androidx.core.app.ActivityCompat
@@ -49,6 +53,10 @@ class MainActivity : AppCompatActivity(),
     private lateinit var recordingDot: View
     private lateinit var segmentCount: TextView
     private lateinit var timeDisplay: TextView
+    private lateinit var detectionToggle: SwitchCompat
+    
+    // Wake lock for preventing sleep during detection
+    private lateinit var wakeLock: PowerManager.WakeLock
 
     companion object {
         private const val TAG = "MTBAnalyzer"
@@ -83,6 +91,7 @@ class MainActivity : AppCompatActivity(),
             recordingDot = findViewById(R.id.recordingDot)
             segmentCount = findViewById(R.id.segmentCount)
             timeDisplay = findViewById(R.id.timeDisplay)
+            detectionToggle = findViewById(R.id.detectionToggle)
             
             // Initialize navigation buttons
             findViewById<android.widget.ImageButton>(R.id.settingsButton).setOnClickListener {
@@ -150,6 +159,21 @@ class MainActivity : AppCompatActivity(),
         
         // Listen for settings changes
         settingsManager.registerChangeListener(this)
+        
+        // Initialize wake lock
+        val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+        wakeLock = powerManager.newWakeLock(
+            PowerManager.PARTIAL_WAKE_LOCK,
+            "MTBAnalyzer::RiderDetectionWakeLock"
+        )
+        
+        // Initialize detection toggle
+        detectionToggle.isChecked = settingsManager.isRiderDetectionEnabled()
+        detectionToggle.setOnCheckedChangeListener { _, isChecked ->
+            settingsManager.setRiderDetectionEnabled(isChecked)
+            updateDetectionState(isChecked)
+            Toast.makeText(this, if (isChecked) "Rider detection enabled" else "Rider detection disabled", Toast.LENGTH_SHORT).show()
+        }
     }
     
     private fun updateTimeDisplay() {
@@ -208,6 +232,9 @@ class MainActivity : AppCompatActivity(),
         viewFinder.viewTreeObserver.addOnGlobalLayoutListener {
             updatePreviewBounds()
         }
+        
+        // Initialize detection state based on settings
+        updateDetectionState(settingsManager.isRiderDetectionEnabled())
     }
     
     private fun updatePreviewBounds() {
@@ -346,6 +373,47 @@ class MainActivity : AppCompatActivity(),
                 riderDetectionProcessor.switchDetector(detectorType)
                 Toast.makeText(this, "Switched to ${getDetectorDisplayName(detectorType)}", Toast.LENGTH_SHORT).show()
             }
+            "rider_detection_enabled" -> {
+                val enabled = settingsManager.isRiderDetectionEnabled()
+                Log.d(TAG, "Rider detection enabled changed to: $enabled")
+                // Update toggle button to match settings
+                detectionToggle.isChecked = enabled
+                updateDetectionState(enabled)
+                Toast.makeText(this, if (enabled) "Rider detection enabled" else "Rider detection disabled", Toast.LENGTH_SHORT).show()
+            }
+            "motion_threshold", "min_motion_area", "show_motion_overlay" -> {
+                // Motion detection settings changed
+                Log.d(TAG, "Motion detection settings changed: $key")
+                riderDetectorManager.applyCurrentSettings()
+            }
+        }
+    }
+    
+    private fun updateDetectionState(enabled: Boolean) {
+        if (enabled) {
+            // Enable detection and keep screen on
+            riderDetectionProcessor.setDetectionEnabled(true)
+            
+            // Keep screen on using window flags (most reliable for camera apps)
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            
+            // Also acquire wake lock as backup
+            if (!wakeLock.isHeld) {
+                wakeLock.acquire()
+                Log.d(TAG, "Screen kept on and wake lock acquired - detection enabled")
+            }
+        } else {
+            // Disable detection and allow screen to sleep
+            riderDetectionProcessor.setDetectionEnabled(false)
+            
+            // Allow screen to turn off
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            
+            // Release wake lock
+            if (wakeLock.isHeld) {
+                wakeLock.release()
+                Log.d(TAG, "Screen sleep allowed and wake lock released - detection disabled")
+            }
         }
     }
     
@@ -367,5 +435,12 @@ class MainActivity : AppCompatActivity(),
         riderDetectionProcessor.release()
         riderDetectorManager.release()
         cameraExecutor.shutdown()
+        
+        // Clear screen on flag and release wake lock
+        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        if (::wakeLock.isInitialized && wakeLock.isHeld) {
+            wakeLock.release()
+            Log.d(TAG, "Screen flag cleared and wake lock released on destroy")
+        }
     }
 }

@@ -11,6 +11,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.SeekBarPreference
 import androidx.preference.SwitchPreferenceCompat
+import androidx.preference.ListPreference
 
 class SettingsActivity : AppCompatActivity() {
 
@@ -39,6 +40,25 @@ class SettingsActivity : AppCompatActivity() {
             setPreferencesFromResource(R.xml.preferences, rootKey)
             
             // Set up preference listeners
+            findPreference<SwitchPreferenceCompat>("rider_detection_enabled")?.setOnPreferenceChangeListener { _, newValue ->
+                val enabled = newValue as Boolean
+                Toast.makeText(context, if (enabled) "Rider detection enabled" else "Rider detection disabled", Toast.LENGTH_SHORT).show()
+                true
+            }
+            
+            findPreference<ListPreference>("detector_type")?.setOnPreferenceChangeListener { _, newValue ->
+                val detectorType = newValue as String
+                val detectorName = when(detectorType) {
+                    "pose" -> "ML Kit Pose Detection"
+                    "motion" -> "Motion Detection"
+                    "optical_flow" -> "Optical Flow Detection"
+                    "hybrid" -> "Hybrid Detection"
+                    else -> "Unknown"
+                }
+                Toast.makeText(context, "Detection method: $detectorName", Toast.LENGTH_SHORT).show()
+                true
+            }
+            
             findPreference<SeekBarPreference>("recording_duration")?.setOnPreferenceChangeListener { _, newValue ->
                 val duration = newValue as Int
                 Toast.makeText(context, "Recording duration: ${duration}s", Toast.LENGTH_SHORT).show()
@@ -54,6 +74,25 @@ class SettingsActivity : AppCompatActivity() {
             findPreference<SwitchPreferenceCompat>("haptic_feedback")?.setOnPreferenceChangeListener { _, newValue ->
                 val enabled = newValue as Boolean
                 Toast.makeText(context, "Haptic feedback: ${if (enabled) "On" else "Off"}", Toast.LENGTH_SHORT).show()
+                true
+            }
+            
+            // Motion detection settings
+            findPreference<SeekBarPreference>("motion_threshold")?.setOnPreferenceChangeListener { _, newValue ->
+                val threshold = newValue as Int
+                Toast.makeText(context, "Motion threshold: $threshold", Toast.LENGTH_SHORT).show()
+                true
+            }
+            
+            findPreference<SeekBarPreference>("min_motion_area")?.setOnPreferenceChangeListener { _, newValue ->
+                val area = newValue as Int
+                Toast.makeText(context, "Min motion area: $area pixels", Toast.LENGTH_SHORT).show()
+                true
+            }
+            
+            findPreference<SwitchPreferenceCompat>("show_motion_overlay")?.setOnPreferenceChangeListener { _, newValue ->
+                val showOverlay = newValue as Boolean
+                Toast.makeText(context, if (showOverlay) "Motion overlay enabled" else "Motion overlay disabled", Toast.LENGTH_SHORT).show()
                 true
             }
             

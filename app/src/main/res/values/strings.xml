@@ -1,3 +1,18 @@
 <resources>
     <string name="app_name">MTB Analyzer</string>
+    
+    <!-- Detector type arrays for settings -->
+    <string-array name="detector_types">
+        <item>ML Kit Pose Detection</item>
+        <item>Motion Detection</item>
+        <item>Optical Flow Detection</item>
+        <item>Hybrid Detection</item>
+    </string-array>
+    
+    <string-array name="detector_values">
+        <item>pose</item>
+        <item>motion</item>
+        <item>optical_flow</item>
+        <item>hybrid</item>
+    </string-array>
 </resources>
