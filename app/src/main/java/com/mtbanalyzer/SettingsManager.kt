@@ -19,6 +19,7 @@ class SettingsManager(context: Context) {
         private const val KEY_MOTION_THRESHOLD = "motion_threshold"
         private const val KEY_MIN_MOTION_AREA = "min_motion_area"
         private const val KEY_SHOW_MOTION_OVERLAY = "show_motion_overlay"
+        private const val KEY_SHOW_PERFORMANCE_OVERLAY = "show_performance_overlay"
         
         // Default values
         private const val DEFAULT_RECORDING_DURATION = 8
@@ -32,6 +33,7 @@ class SettingsManager(context: Context) {
         private const val DEFAULT_MOTION_THRESHOLD = 30
         private const val DEFAULT_MIN_MOTION_AREA = 5000
         private const val DEFAULT_SHOW_MOTION_OVERLAY = true
+        private const val DEFAULT_SHOW_PERFORMANCE_OVERLAY = false
     }
     
     fun getRecordingDuration(): Int {
@@ -105,6 +107,10 @@ class SettingsManager(context: Context) {
             "min_motion_area" to getMinMotionArea(),
             "show_motion_overlay" to shouldShowMotionOverlay()
         )
+    }
+    
+    fun shouldShowPerformanceOverlay(): Boolean {
+        return sharedPreferences.getBoolean(KEY_SHOW_PERFORMANCE_OVERLAY, DEFAULT_SHOW_PERFORMANCE_OVERLAY)
     }
     
     fun registerChangeListener(listener: SharedPreferences.OnSharedPreferenceChangeListener) {

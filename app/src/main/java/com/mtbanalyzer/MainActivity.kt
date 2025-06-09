@@ -157,6 +157,11 @@ class MainActivity : AppCompatActivity(),
         // Set callbacks
         riderDetectionProcessor.setCallback(this)
         
+        // Initialize performance overlay state from settings
+        if (settingsManager.shouldShowPerformanceOverlay()) {
+            riderDetectionProcessor.togglePerformanceOverlay()
+        }
+        
         // Listen for settings changes
         settingsManager.registerChangeListener(this)
         
@@ -385,6 +390,15 @@ class MainActivity : AppCompatActivity(),
                 // Motion detection settings changed
                 Log.d(TAG, "Motion detection settings changed: $key")
                 riderDetectorManager.applyCurrentSettings()
+            }
+            "show_performance_overlay" -> {
+                val showOverlay = settingsManager.shouldShowPerformanceOverlay()
+                Log.d(TAG, "Performance overlay setting changed to: $showOverlay")
+                if (showOverlay) {
+                    riderDetectionProcessor.togglePerformanceOverlay()
+                } else if (riderDetectionProcessor.isPerformanceOverlayEnabled()) {
+                    riderDetectionProcessor.togglePerformanceOverlay()
+                }
             }
         }
     }

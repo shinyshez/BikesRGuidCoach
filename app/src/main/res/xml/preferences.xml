@@ -110,6 +110,16 @@
 
     </PreferenceCategory>
 
+    <PreferenceCategory android:title="Developer">
+
+        <SwitchPreferenceCompat
+            android:key="show_performance_overlay"
+            android:title="Performance Monitor"
+            android:summary="Show FPS, processing time, and latency metrics"
+            android:defaultValue="false" />
+
+    </PreferenceCategory>
+
     <PreferenceCategory android:title="Storage">
 
         <Preference

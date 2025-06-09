@@ -36,6 +36,11 @@ class RiderDetectionProcessor(
     private var isCurrentlyRecording = false
     private var callback: RiderDetectionCallback? = null
     private var isDetectionEnabled = true
+    
+    // Performance monitoring
+    private val performanceMonitor = PerformanceMonitor()
+    private var showPerformanceOverlay = false
+    private var performanceOverlay: PerformanceOverlay? = null
 
     init {
         // Set up the detector manager callback
@@ -62,6 +67,7 @@ class RiderDetectionProcessor(
         recordingStartTime = System.currentTimeMillis()
         isCurrentlyRecording = true
         detectorManager.setRecordingStarted()
+        performanceMonitor.onRecordingStarted()
         Log.d(TAG, "Recording started at $recordingStartTime")
     }
     
@@ -70,22 +76,35 @@ class RiderDetectionProcessor(
         recordingStartTime = 0L
         lastRecordingAttemptTime = 0L
         detectorManager.setRecordingStopped()
+        performanceMonitor.resetDetectionTiming()
         Log.d(TAG, "Recording stopped")
     }
 
     @androidx.camera.core.ExperimentalGetImage
     override fun analyze(imageProxy: ImageProxy) {
+        // Start performance timing
+        val frameStartTime = performanceMonitor.onFrameStart()
+        
         val mediaImage = imageProxy.image
         if (mediaImage != null) {
             try {
                 // Note: Image source info is set by CameraManager with actual preview dimensions
                 
                 if (isDetectionEnabled) {
+                    val detectorStartTime = System.currentTimeMillis()
+                    
                     // Process frame with current detector - manager will handle closing the imageProxy
                     detectorManager.processFrame(imageProxy, graphicOverlay)
                     
+                    // Track detector processing time
+                    val detectorTime = System.currentTimeMillis() - detectorStartTime
+                    performanceMonitor.onDetectorProcessed(detectorTime)
+                    
                     // Handle recording logic
                     handleRecordingLogic()
+                    
+                    // Update performance overlay
+                    updatePerformanceOverlay()
                 } else {
                     // Detection disabled - just close the image and clear overlays
                     graphicOverlay.clear()
@@ -96,6 +115,7 @@ class RiderDetectionProcessor(
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error in analyze", e)
+                performanceMonitor.onFrameDropped()
                 // If there's an error before calling processFrame, we need to close it ourselves
                 try {
                     imageProxy.close()
@@ -106,6 +126,9 @@ class RiderDetectionProcessor(
         } else {
             imageProxy.close()
         }
+        
+        // End performance timing
+        performanceMonitor.onFrameEnd(frameStartTime)
     }
 
 
@@ -118,6 +141,9 @@ class RiderDetectionProcessor(
             isRiderDetected = true
             Log.d(TAG, "Rider entered frame: $debugInfo")
             callback?.onRiderDetected(confidence, debugInfo)
+            
+            // Track first detection for latency measurement
+            performanceMonitor.onRiderDetected()
             
             // Check if we should start recording
             val timeSinceLastAttempt = currentTime - lastRecordingAttemptTime
@@ -216,4 +242,37 @@ class RiderDetectionProcessor(
      * Check if detection is currently enabled
      */
     fun isDetectionEnabled(): Boolean = isDetectionEnabled
+    
+    /**
+     * Toggle performance overlay visibility
+     */
+    fun togglePerformanceOverlay() {
+        showPerformanceOverlay = !showPerformanceOverlay
+        if (!showPerformanceOverlay) {
+            // Remove overlay when disabled
+            performanceOverlay?.let { graphicOverlay.remove(it) }
+            performanceOverlay = null
+        }
+    }
+    
+    /**
+     * Check if performance overlay is enabled
+     */
+    fun isPerformanceOverlayEnabled(): Boolean = showPerformanceOverlay
+    
+    /**
+     * Update the performance overlay
+     */
+    private fun updatePerformanceOverlay() {
+        if (!showPerformanceOverlay) return
+        
+        // Remove old overlay
+        performanceOverlay?.let { graphicOverlay.remove(it) }
+        
+        // Create new overlay with current metrics
+        val detectorInfo = detectorManager.getCurrentDetectorInfo()
+        val detectorName = detectorInfo?.first ?: "Unknown"
+        performanceOverlay = PerformanceOverlay(graphicOverlay, performanceMonitor, detectorName)
+        graphicOverlay.add(performanceOverlay!!)
+    }
 }
