@@ -56,15 +56,21 @@ class OpticalFlowRiderDetector : RiderDetector() {
         
         return withContext(Dispatchers.Default) {
             try {
-                val originalWidth = imageProxy.width
-                val originalHeight = imageProxy.height
+                // Get rotation info (same as motion detector)
+                val rotationDegrees = imageProxy.imageInfo.rotationDegrees
+                val isRotated = rotationDegrees == 90 || rotationDegrees == 270
+                
+                // Get dimensions - swap if rotated to match what GraphicOverlay expects
+                val originalWidth = if (isRotated) imageProxy.height else imageProxy.width
+                val originalHeight = if (isRotated) imageProxy.width else imageProxy.height
+                
                 val currentFrame = imageProxyToGrayscaleBitmap(imageProxy)
                 
                 // Calculate scale factor from original image to processed image
                 imageScaleFactor = originalWidth.toFloat() / currentFrame.width.toFloat()
                 
                 val result = if (previousFrame != null && previousFeatures.isNotEmpty()) {
-                    calculateOpticalFlow(previousFrame!!, currentFrame, graphicOverlay)
+                    calculateOpticalFlow(previousFrame!!, currentFrame, graphicOverlay, originalWidth, originalHeight)
                 } else {
                     // First frame or no previous features - just detect features for next frame
                     val features = detectFeatures(currentFrame)
@@ -86,7 +92,9 @@ class OpticalFlowRiderDetector : RiderDetector() {
     private fun calculateOpticalFlow(
         prevFrame: Bitmap, 
         currentFrame: Bitmap, 
-        graphicOverlay: GraphicOverlay
+        graphicOverlay: GraphicOverlay,
+        originalWidth: Int,
+        originalHeight: Int
     ): DetectionResult {
         val flowVectors = mutableListOf<FlowVector>()
         val trackedFeatures = mutableListOf<FeaturePoint>()
@@ -122,7 +130,7 @@ class OpticalFlowRiderDetector : RiderDetector() {
         // Draw flow vectors on overlay
         if (showFlowOverlay) {
             graphicOverlay.clear()
-            graphicOverlay.add(OpticalFlowGraphic(graphicOverlay, flowVectors, previousFeatures, imageScaleFactor))
+            graphicOverlay.add(OpticalFlowGraphic(graphicOverlay, flowVectors, previousFeatures, originalWidth, originalHeight))
         }
         
         val debugInfo = "Vectors: ${flowVectors.size}, Features: ${previousFeatures.size}, AvgMag: %.1f".format(
@@ -458,7 +466,8 @@ class OpticalFlowRiderDetector : RiderDetector() {
         overlay: GraphicOverlay,
         private val flowVectors: List<FlowVector>,
         private val features: List<FeaturePoint>,
-        private val scaleFactor: Float
+        private val imageWidth: Int,
+        private val imageHeight: Int
     ) : GraphicOverlay.Graphic(overlay) {
         
         private val vectorPaint = Paint().apply {
@@ -474,9 +483,35 @@ class OpticalFlowRiderDetector : RiderDetector() {
         }
         
         override fun draw(canvas: Canvas) {
-            // Draw flow vectors
+            // Use the dynamic camera aspect ratio from GraphicOverlay (same as MotionGraphic)
+            val overlayWidth = getOverlayWidth()
+            val overlayHeight = getOverlayHeight()
+            val cameraAspectRatio = getCameraAspectRatio()
+            val viewAspectRatio = overlayWidth.toFloat() / overlayHeight.toFloat()
+            
+            val previewWidth: Float
+            val previewHeight: Float
+            val previewLeft: Float
+            val previewTop: Float
+            
+            if (viewAspectRatio > cameraAspectRatio) {
+                // View is wider than camera - preview is constrained by height
+                previewHeight = overlayHeight.toFloat()
+                previewWidth = previewHeight * cameraAspectRatio
+                previewLeft = (overlayWidth - previewWidth) / 2
+                previewTop = 0f
+            } else {
+                // View is taller than camera - preview is constrained by width
+                previewWidth = overlayWidth.toFloat()
+                previewHeight = previewWidth / cameraAspectRatio
+                previewLeft = 0f
+                previewTop = (overlayHeight - previewHeight) / 2
+            }
+            
+            // Draw flow vectors - use translateX/Y like other graphics
             for (vector in flowVectors) {
-                // Scale coordinates back to original image space before overlay transformation
+                // Scale coordinates to match the original camera image space
+                val scaleFactor = imageWidth.toFloat() / getOverlayImageWidth().toFloat()
                 val startX = translateX(vector.startPoint.x * scaleFactor)
                 val startY = translateY(vector.startPoint.y * scaleFactor)
                 val endX = translateX(vector.endPoint.x * scaleFactor)
@@ -500,7 +535,7 @@ class OpticalFlowRiderDetector : RiderDetector() {
             
             // Draw feature points
             for (feature in features) {
-                // Scale coordinates back to original image space before overlay transformation
+                val scaleFactor = imageWidth.toFloat() / getOverlayImageWidth().toFloat()
                 val x = translateX(feature.x * scaleFactor)
                 val y = translateY(feature.y * scaleFactor)
                 canvas.drawCircle(x, y, 3f, featurePaint)
