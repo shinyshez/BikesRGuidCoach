@@ -55,6 +55,12 @@
             android:exported="false"
             android:parentActivityName=".VideoGalleryActivity"
             android:screenOrientation="landscape" />
+            
+        <activity
+            android:name=".VideoPlaybackActivity"
+            android:exported="false"
+            android:parentActivityName=".VideoGalleryActivity"
+            android:screenOrientation="landscape" />
 
     </application>
 

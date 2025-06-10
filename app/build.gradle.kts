@@ -53,6 +53,8 @@ dependencies {
     // ML Kit for pose detection
     implementation("com.google.mlkit:pose-detection:18.0.0-beta3")
     implementation("com.google.mlkit:pose-detection-accurate:18.0.0-beta3")
+    
+    // Note: Optical flow now uses optimized custom implementation for better performance
 
     // Lifecycle
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
@@ -66,6 +68,9 @@ dependencies {
     
     // Glide for image loading
     implementation("com.github.bumptech.glide:glide:4.16.0")
+    
+    // Coroutines for async operations
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 
     // Testing
     testImplementation("junit:junit:4.13.2")

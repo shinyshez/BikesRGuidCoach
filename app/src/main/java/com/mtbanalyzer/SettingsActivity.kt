@@ -55,11 +55,14 @@ class SettingsActivity : AppCompatActivity() {
             // Create detector config category
             detectorConfigCategory = PreferenceCategory(requireContext()).apply {
                 title = "Detector Settings"
-                dependency = "rider_detection_enabled"
+                order = 100 // Position it after detection category
             }
             
             // Add it to the screen
             preferenceScreen.addPreference(detectorConfigCategory!!)
+            
+            // Set the dependency after preferences are added
+            detectorConfigCategory?.dependency = "rider_detection_enabled"
             
             // Load initial detector config
             loadDetectorConfig()
