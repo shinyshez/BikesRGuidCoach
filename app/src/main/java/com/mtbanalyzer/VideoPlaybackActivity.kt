@@ -31,8 +31,11 @@ class VideoPlaybackActivity : AppCompatActivity() {
     }
     
     private lateinit var videoView: VideoView
+    private lateinit var frameImageView: ImageView
     private lateinit var graphicOverlay: GraphicOverlay
     private lateinit var playPauseButton: ImageButton
+    private lateinit var frameForwardButton: ImageButton
+    private lateinit var frameBackwardButton: ImageButton
     private lateinit var seekBar: SeekBar
     private lateinit var timeDisplay: TextView
     private lateinit var poseToggleButton: Button
@@ -63,6 +66,16 @@ class VideoPlaybackActivity : AppCompatActivity() {
     private var controlsVisible = true
     private val hideControlsRunnable = Runnable { hideControls() }
     private val showControlsDelay = 3000L // Hide controls after 3 seconds
+    
+    // Frame stepping mode
+    private var isFrameSteppingMode = false
+    
+    // Frame stepping variables
+    private var currentFrameIndex = 0L
+    private var totalFrames = 0L
+    private var frameRate = 30.0 // Default, will be detected from video
+    private var frameDurationUs = 33333L // Microseconds per frame (1/30 second)
+    private var currentPositionMs = 0 // Track position independently of VideoView
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -135,8 +148,11 @@ class VideoPlaybackActivity : AppCompatActivity() {
     
     private fun initializeViews() {
         videoView = findViewById(R.id.videoView)
+        frameImageView = findViewById(R.id.frameImageView)
         graphicOverlay = findViewById(R.id.graphic_overlay)
         playPauseButton = findViewById(R.id.playPauseButton)
+        frameForwardButton = findViewById(R.id.frameForwardButton)
+        frameBackwardButton = findViewById(R.id.frameBackwardButton)
         seekBar = findViewById(R.id.seekBar)
         timeDisplay = findViewById(R.id.timeDisplay)
         poseToggleButton = findViewById(R.id.poseToggleButton)
@@ -176,6 +192,20 @@ class VideoPlaybackActivity : AppCompatActivity() {
         try {
             mediaRetriever = MediaMetadataRetriever().apply {
                 setDataSource(this@VideoPlaybackActivity, videoUri)
+                
+                // Extract video properties for accurate frame stepping
+                val durationStr = extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                val frameRateStr = extractMetadata(MediaMetadataRetriever.METADATA_KEY_CAPTURE_FRAMERATE)
+                
+                Log.d(TAG, "Raw metadata: duration='$durationStr', frameRate='$frameRateStr'")
+                
+                val videoDurationMs = durationStr?.toLongOrNull() ?: videoDuration.toLong()
+                frameRate = frameRateStr?.toDoubleOrNull() ?: 30.0
+                frameDurationUs = (1_000_000.0 / frameRate).toLong() // Microseconds per frame
+                totalFrames = ((videoDurationMs * frameRate) / 1000.0).toLong()
+                
+                Log.d(TAG, "Video properties: duration=${videoDurationMs}ms, frameRate=${frameRate}fps, totalFrames=$totalFrames, frameDurationUs=${frameDurationUs}us")
+                Log.d(TAG, "VideoView duration: ${videoDuration}ms")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error initializing media retriever", e)
@@ -194,6 +224,10 @@ class VideoPlaybackActivity : AppCompatActivity() {
                 seekBar.max = videoDuration
                 updateTimeDisplay(0)
                 loadingIndicator.visibility = View.GONE
+                
+                // Initialize frame tracking
+                currentPositionMs = 0
+                currentFrameIndex = 0
                 
                 // Center the video and maintain aspect ratio
                 centerVideoView(mediaPlayer)
@@ -226,6 +260,16 @@ class VideoPlaybackActivity : AppCompatActivity() {
             }
         }
         
+        frameForwardButton.setOnClickListener {
+            Log.d(TAG, "Frame forward button clicked")
+            stepFrame(forward = true)
+        }
+        
+        frameBackwardButton.setOnClickListener {
+            Log.d(TAG, "Frame backward button clicked")
+            stepFrame(forward = false)
+        }
+        
         poseToggleButton.setOnClickListener {
             togglePoseDetection()
         }
@@ -233,11 +277,33 @@ class VideoPlaybackActivity : AppCompatActivity() {
         seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 if (fromUser) {
+                    // Update our position tracking
+                    currentPositionMs = progress
+                    currentFrameIndex = ((progress * frameRate) / 1000.0).toLong()
+                    
+                    // For smoother seeking, we'll use the exact frame extraction
+                    if (isPoseDetectionEnabled && !isPlaying) {
+                        // Extract exact frame for pose detection when paused
+                        coroutineScope.launch {
+                            try {
+                                val frameTimeUs = currentFrameIndex * frameDurationUs
+                                val frameBitmap = withContext(Dispatchers.IO) {
+                                    mediaRetriever?.getFrameAtTime(frameTimeUs, MediaMetadataRetriever.OPTION_CLOSEST)
+                                }
+                                
+                                withContext(Dispatchers.Main) {
+                                    if (frameBitmap != null) {
+                                        processBitmapForPose(frameBitmap)
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Error extracting frame during seek", e)
+                            }
+                        }
+                    }
+                    
                     videoView.seekTo(progress)
                     updateTimeDisplay(progress)
-                    if (isPoseDetectionEnabled) {
-                        processCurrentFrame()
-                    }
                 }
             }
             
@@ -352,6 +418,13 @@ class VideoPlaybackActivity : AppCompatActivity() {
     }
     
     private fun playVideo() {
+        // Hide frame overlay when resuming video playback
+        if (isFrameSteppingMode) {
+            frameImageView.visibility = View.GONE
+            isFrameSteppingMode = false
+            Log.d(TAG, "Switched back to video playback mode")
+        }
+        
         videoView.start()
         isPlaying = true
         playPauseButton.setImageResource(android.R.drawable.ic_media_pause)
@@ -374,6 +447,92 @@ class VideoPlaybackActivity : AppCompatActivity() {
         // Keep controls visible when paused
         showControls()
         mainHandler.removeCallbacks(hideControlsRunnable)
+    }
+    
+    private fun stepFrame(forward: Boolean) {
+        Log.d(TAG, "stepFrame called: forward=$forward")
+        
+        // Ensure video is paused for frame stepping
+        if (isPlaying) {
+            pauseVideo()
+        }
+        
+        // Step to next/previous frame
+        val newFrameIndex = if (forward) {
+            minOf(currentFrameIndex + 1, totalFrames - 1)
+        } else {
+            maxOf(currentFrameIndex - 1, 0)
+        }
+        
+        Log.d(TAG, "Stepping from frame $currentFrameIndex to $newFrameIndex (forward=$forward)")
+        
+        if (newFrameIndex == currentFrameIndex) {
+            Log.d(TAG, "Already at ${if (forward) "end" else "beginning"} of video")
+            Toast.makeText(this, "At ${if (forward) "end" else "beginning"} of video", Toast.LENGTH_SHORT).show()
+            return
+        }
+        
+        currentFrameIndex = newFrameIndex
+        
+        // Calculate exact time for this frame
+        val frameTimeUs = currentFrameIndex * frameDurationUs
+        val frameTimeMs = (frameTimeUs / 1000).toInt()
+        
+        // Update our position tracking
+        currentPositionMs = frameTimeMs
+        
+        Log.d(TAG, "Frame $currentFrameIndex -> time ${frameTimeMs}ms (${frameTimeUs}us)")
+        
+        // Show controls immediately and update display
+        showControls()
+        mainHandler.removeCallbacks(hideControlsRunnable)
+        
+        // Update UI immediately for responsive feedback
+        seekBar.progress = frameTimeMs
+        updateTimeDisplay(frameTimeMs)
+        
+        // Extract and display the exact frame using MediaMetadataRetriever
+        coroutineScope.launch {
+            try {
+                Log.d(TAG, "Extracting frame at ${frameTimeUs}us")
+                val frameBitmap = withContext(Dispatchers.IO) {
+                    mediaRetriever?.getFrameAtTime(frameTimeUs, MediaMetadataRetriever.OPTION_CLOSEST)
+                }
+                
+                Log.d(TAG, "Frame extracted: ${frameBitmap != null}, size: ${frameBitmap?.width}x${frameBitmap?.height}")
+                
+                // Update UI on main thread
+                withContext(Dispatchers.Main) {
+                    // Display the extracted frame in the ImageView overlay
+                    if (frameBitmap != null) {
+                        frameImageView.setImageBitmap(frameBitmap)
+                        frameImageView.visibility = View.VISIBLE
+                        isFrameSteppingMode = true
+                        Log.d(TAG, "Displaying extracted frame in ImageView")
+                    }
+                    
+                    // Update VideoView position to keep it in sync (for audio position, etc.)
+                    videoView.seekTo(frameTimeMs)
+                    
+                    // Process pose detection on the exact frame if enabled
+                    if (isPoseDetectionEnabled && frameBitmap != null) {
+                        Log.d(TAG, "Processing pose detection for frame $currentFrameIndex")
+                        processBitmapForPose(frameBitmap)
+                    } else {
+                        Log.d(TAG, "Skipping pose detection: enabled=$isPoseDetectionEnabled, bitmap=${frameBitmap != null}")
+                    }
+                    
+                    Log.d(TAG, "Frame step completed successfully to frame $currentFrameIndex")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error extracting frame at index $currentFrameIndex", e)
+                // Fallback to regular seeking
+                withContext(Dispatchers.Main) {
+                    videoView.seekTo(frameTimeMs)
+                    Toast.makeText(this@VideoPlaybackActivity, "Frame extraction failed, using seek", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
     }
     
     private fun togglePoseDetection() {
@@ -512,8 +671,11 @@ class VideoPlaybackActivity : AppCompatActivity() {
         val totalMin = totalSec / 60
         val totalSecRem = totalSec % 60
         
-        timeDisplay.text = String.format("%d:%02d / %d:%02d", 
-            currentMin, currentSecRem, totalMin, totalSecRem)
+        // Calculate current frame for display
+        val displayFrameIndex = ((position * frameRate) / 1000.0).toLong()
+        
+        timeDisplay.text = String.format("%d:%02d / %d:%02d (Frame %d/%d)", 
+            currentMin, currentSecRem, totalMin, totalSecRem, displayFrameIndex, totalFrames)
     }
     
     private fun startSeekBarUpdater() {

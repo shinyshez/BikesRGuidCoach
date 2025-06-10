@@ -16,6 +16,19 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
+    <!-- Frame Image Overlay (for precise frame display) -->
+    <ImageView
+        android:id="@+id/frameImageView"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone"
+        android:scaleType="fitCenter"
+        android:background="@android:color/black"
+        app:layout_constraintTop_toTopOf="@id/videoView"
+        app:layout_constraintBottom_toBottomOf="@id/videoView"
+        app:layout_constraintStart_toStartOf="@id/videoView"
+        app:layout_constraintEnd_toEndOf="@id/videoView" />
+
     <!-- Pose Overlay -->
     <com.mtbanalyzer.GraphicOverlay
         android:id="@+id/graphic_overlay"
@@ -136,13 +149,37 @@
                 android:gravity="center">
 
                 <ImageButton
+                    android:id="@+id/frameBackwardButton"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:src="@android:drawable/ic_media_previous"
+                    android:background="@drawable/button_circle_background"
+                    android:scaleType="fitCenter"
+                    android:layout_marginEnd="16dp"
+                    app:tint="@android:color/white"
+                    android:contentDescription="Previous frame" />
+
+                <ImageButton
                     android:id="@+id/playPauseButton"
                     android:layout_width="56dp"
                     android:layout_height="56dp"
                     android:src="@android:drawable/ic_media_play"
                     android:background="@drawable/button_circle_background"
                     android:scaleType="fitCenter"
+                    android:layout_marginStart="8dp"
+                    android:layout_marginEnd="8dp"
                     app:tint="@android:color/white" />
+
+                <ImageButton
+                    android:id="@+id/frameForwardButton"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:src="@android:drawable/ic_media_next"
+                    android:background="@drawable/button_circle_background"
+                    android:scaleType="fitCenter"
+                    android:layout_marginStart="16dp"
+                    app:tint="@android:color/white"
+                    android:contentDescription="Next frame" />
 
             </LinearLayout>
 
