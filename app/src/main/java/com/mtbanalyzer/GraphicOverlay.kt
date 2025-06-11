@@ -20,6 +20,7 @@ class GraphicOverlay(context: Context, attrs: AttributeSet?) : View(context, att
     private var facing = CameraFacing.BACK
     private val graphics = ArrayList<Graphic>()
     private var cameraAspectRatio: Float = 16f / 9f // Default fallback, will be updated with actual camera ratio
+    private var showPreviewBorder: Boolean = false // Flag to control border display
     
     // Actual preview bounds within the overlay
     private var actualPreviewLeft: Float = 0f
@@ -127,6 +128,13 @@ class GraphicOverlay(context: Context, attrs: AttributeSet?) : View(context, att
         postInvalidate()
     }
     
+    fun setShowPreviewBorder(show: Boolean) {
+        synchronized(lock) {
+            this.showPreviewBorder = show
+        }
+        postInvalidate()
+    }
+    
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         
@@ -151,8 +159,10 @@ class GraphicOverlay(context: Context, attrs: AttributeSet?) : View(context, att
                 Log.d("GraphicOverlay", "View size: ${width}x${height}, Image size: ${imageWidth}x${imageHeight}")
                 Log.d("GraphicOverlay", "Scale factors: width=$widthScaleFactor, height=$heightScaleFactor")
                 
-                // Draw a white border around the camera preview area
-                drawPreviewBorder(canvas)
+                // Draw a white border around the camera preview area only if enabled
+                if (showPreviewBorder) {
+                    drawPreviewBorder(canvas)
+                }
             }
             
             for (graphic in graphics) {

@@ -77,6 +77,15 @@ class VideoPlaybackActivity : AppCompatActivity() {
     private var frameDurationUs = 33333L // Microseconds per frame (1/30 second)
     private var currentPositionMs = 0 // Track position independently of VideoView
     
+    // Seekbar frame extraction throttling
+    private var seekFrameJob: Job? = null
+    private var lastSeekRequest = 0L
+    
+    // Frame button hold-to-repeat variables
+    private var frameButtonHoldJob: Job? = null
+    private val frameButtonInitialDelay = 300L // Initial delay before repeating
+    private val frameButtonRepeatDelay = 50L // Delay between repeats when held
+    
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
@@ -260,15 +269,7 @@ class VideoPlaybackActivity : AppCompatActivity() {
             }
         }
         
-        frameForwardButton.setOnClickListener {
-            Log.d(TAG, "Frame forward button clicked")
-            stepFrame(forward = true)
-        }
-        
-        frameBackwardButton.setOnClickListener {
-            Log.d(TAG, "Frame backward button clicked")
-            stepFrame(forward = false)
-        }
+        setupFrameStepButtons()
         
         poseToggleButton.setOnClickListener {
             togglePoseDetection()
@@ -277,14 +278,23 @@ class VideoPlaybackActivity : AppCompatActivity() {
         seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 if (fromUser) {
-                    // Update our position tracking
+                    // Update our position tracking immediately for UI responsiveness
                     currentPositionMs = progress
                     currentFrameIndex = ((progress * frameRate) / 1000.0).toLong()
+                    updateTimeDisplay(progress)
                     
-                    // For smoother seeking, we'll use the exact frame extraction
-                    if (isPoseDetectionEnabled && !isPlaying) {
-                        // Extract exact frame for pose detection when paused
-                        coroutineScope.launch {
+                    // Throttle frame extraction to avoid lag - cancel previous request and start new one
+                    seekFrameJob?.cancel()
+                    lastSeekRequest = System.currentTimeMillis()
+                    
+                    seekFrameJob = coroutineScope.launch {
+                        val requestTime = lastSeekRequest
+                        
+                        // Small delay to batch rapid seek changes
+                        delay(50)
+                        
+                        // Only proceed if this is still the most recent request
+                        if (requestTime == lastSeekRequest) {
                             try {
                                 val frameTimeUs = currentFrameIndex * frameDurationUs
                                 val frameBitmap = withContext(Dispatchers.IO) {
@@ -292,18 +302,32 @@ class VideoPlaybackActivity : AppCompatActivity() {
                                 }
                                 
                                 withContext(Dispatchers.Main) {
-                                    if (frameBitmap != null) {
-                                        processBitmapForPose(frameBitmap)
+                                    // Double-check this is still the latest request
+                                    if (requestTime == lastSeekRequest && frameBitmap != null) {
+                                        // Show extracted frame in ImageView overlay for precise seeking
+                                        frameImageView.setImageBitmap(frameBitmap)
+                                        frameImageView.visibility = View.VISIBLE
+                                        isFrameSteppingMode = true
+                                        Log.d(TAG, "Displaying frame during seek: frame $currentFrameIndex")
+                                        
+                                        // Process pose detection if enabled
+                                        if (isPoseDetectionEnabled) {
+                                            processBitmapForPose(frameBitmap)
+                                        }
                                     }
+                                    
+                                    // Keep VideoView in sync for audio position
+                                    videoView.seekTo(progress)
                                 }
                             } catch (e: Exception) {
                                 Log.e(TAG, "Error extracting frame during seek", e)
+                                // Fallback to regular VideoView seek
+                                withContext(Dispatchers.Main) {
+                                    videoView.seekTo(progress)
+                                }
                             }
                         }
                     }
-                    
-                    videoView.seekTo(progress)
-                    updateTimeDisplay(progress)
                 }
             }
             
@@ -704,12 +728,104 @@ class VideoPlaybackActivity : AppCompatActivity() {
         mainHandler.removeCallbacks(hideControlsRunnable)
     }
     
+    private fun setupFrameStepButtons() {
+        // Forward button - single click
+        frameForwardButton.setOnClickListener {
+            Log.d(TAG, "Frame forward button clicked")
+            stepFrame(forward = true)
+        }
+        
+        // Forward button - hold to repeat
+        frameForwardButton.setOnTouchListener { _, event ->
+            when (event.action) {
+                android.view.MotionEvent.ACTION_DOWN -> {
+                    // Cancel any existing job
+                    frameButtonHoldJob?.cancel()
+                    
+                    // Start a new coroutine for hold-to-repeat
+                    frameButtonHoldJob = coroutineScope.launch {
+                        // Initial step
+                        withContext(Dispatchers.Main) {
+                            stepFrame(forward = true)
+                        }
+                        
+                        // Wait for initial delay
+                        delay(frameButtonInitialDelay)
+                        
+                        // Continue stepping while button is held
+                        while (isActive) {
+                            withContext(Dispatchers.Main) {
+                                stepFrame(forward = true)
+                            }
+                            delay(frameButtonRepeatDelay)
+                        }
+                    }
+                    true
+                }
+                android.view.MotionEvent.ACTION_UP,
+                android.view.MotionEvent.ACTION_CANCEL -> {
+                    // Cancel the hold job when button is released
+                    frameButtonHoldJob?.cancel()
+                    frameButtonHoldJob = null
+                    true
+                }
+                else -> false
+            }
+        }
+        
+        // Backward button - single click
+        frameBackwardButton.setOnClickListener {
+            Log.d(TAG, "Frame backward button clicked")
+            stepFrame(forward = false)
+        }
+        
+        // Backward button - hold to repeat
+        frameBackwardButton.setOnTouchListener { _, event ->
+            when (event.action) {
+                android.view.MotionEvent.ACTION_DOWN -> {
+                    // Cancel any existing job
+                    frameButtonHoldJob?.cancel()
+                    
+                    // Start a new coroutine for hold-to-repeat
+                    frameButtonHoldJob = coroutineScope.launch {
+                        // Initial step
+                        withContext(Dispatchers.Main) {
+                            stepFrame(forward = false)
+                        }
+                        
+                        // Wait for initial delay
+                        delay(frameButtonInitialDelay)
+                        
+                        // Continue stepping while button is held
+                        while (isActive) {
+                            withContext(Dispatchers.Main) {
+                                stepFrame(forward = false)
+                            }
+                            delay(frameButtonRepeatDelay)
+                        }
+                    }
+                    true
+                }
+                android.view.MotionEvent.ACTION_UP,
+                android.view.MotionEvent.ACTION_CANCEL -> {
+                    // Cancel the hold job when button is released
+                    frameButtonHoldJob?.cancel()
+                    frameButtonHoldJob = null
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+    
     override fun onDestroy() {
         super.onDestroy()
         try {
             videoView.stopPlayback()
             poseDetector.close()
             processingExecutor.shutdown()
+            seekFrameJob?.cancel()
+            frameButtonHoldJob?.cancel()
             coroutineScope.cancel()
             mediaRetriever?.release()
         } catch (e: Exception) {

@@ -16,10 +16,10 @@ class OpticalFlowRiderDetector : RiderDetector() {
     
     companion object {
         private const val TAG = "OpticalFlowDetector"
-        private const val DEFAULT_FEATURE_COUNT = 100
-        private const val DEFAULT_MIN_FEATURE_DISTANCE = 10
+        private const val DEFAULT_FEATURE_COUNT = 25  // Reduced from 100 to 25 for performance
+        private const val DEFAULT_MIN_FEATURE_DISTANCE = 15  // Increased spacing to reduce overlap
         private const val DEFAULT_FLOW_THRESHOLD = 2.0
-        private const val DEFAULT_MIN_COHERENT_VECTORS = 8
+        private const val DEFAULT_MIN_COHERENT_VECTORS = 5  // Reduced from 8 to match lower feature count
         private const val DEFAULT_MAX_VECTOR_MAGNITUDE = 50.0
     }
     
@@ -54,6 +54,8 @@ class OpticalFlowRiderDetector : RiderDetector() {
             return DetectionResult(false, 0.0, "Detector disabled")
         }
         
+        val startTime = System.currentTimeMillis()
+        
         return withContext(Dispatchers.Default) {
             try {
                 // Get rotation info (same as motion detector)
@@ -64,10 +66,15 @@ class OpticalFlowRiderDetector : RiderDetector() {
                 val originalWidth = if (isRotated) imageProxy.height else imageProxy.width
                 val originalHeight = if (isRotated) imageProxy.width else imageProxy.height
                 
+                val bitmapStartTime = System.currentTimeMillis()
                 val currentFrame = imageProxyToGrayscaleBitmap(imageProxy)
+                val bitmapTime = System.currentTimeMillis() - bitmapStartTime
                 
                 // Calculate scale factor from original image to processed image
                 imageScaleFactor = originalWidth.toFloat() / currentFrame.width.toFloat()
+                
+                // Debug: Log actual optical flow image dimensions
+                android.util.Log.d("OpticalFlow", "ACTUAL_DIMENSIONS: currentFrame=${currentFrame.width}x${currentFrame.height}, original=${originalWidth}x${originalHeight}, bitmapTime=${bitmapTime}ms")
                 
                 val result = if (previousFrame != null && previousFeatures.isNotEmpty()) {
                     calculateOpticalFlow(previousFrame!!, currentFrame, graphicOverlay, originalWidth, originalHeight)
@@ -80,6 +87,9 @@ class OpticalFlowRiderDetector : RiderDetector() {
                 
                 previousFrame?.recycle()
                 previousFrame = currentFrame
+                
+                val totalTime = System.currentTimeMillis() - startTime
+                android.util.Log.d("OpticalFlow", "TOTAL_PROCESS_TIME: ${totalTime}ms (bitmap: ${bitmapTime}ms)")
                 
                 result
             } catch (e: Exception) {
@@ -96,6 +106,7 @@ class OpticalFlowRiderDetector : RiderDetector() {
         originalWidth: Int,
         originalHeight: Int
     ): DetectionResult {
+        val flowStartTime = System.currentTimeMillis()
         val flowVectors = mutableListOf<FlowVector>()
         val trackedFeatures = mutableListOf<FeaturePoint>()
         
@@ -130,12 +141,16 @@ class OpticalFlowRiderDetector : RiderDetector() {
         // Draw flow vectors on overlay
         if (showFlowOverlay) {
             graphicOverlay.clear()
-            graphicOverlay.add(OpticalFlowGraphic(graphicOverlay, flowVectors, previousFeatures, originalWidth, originalHeight))
+            graphicOverlay.add(OpticalFlowGraphic(graphicOverlay, flowVectors, previousFeatures, originalWidth, originalHeight, currentFrame.width, currentFrame.height))
         }
         
-        val debugInfo = "Vectors: ${flowVectors.size}, Features: ${previousFeatures.size}, AvgMag: %.1f".format(
+        val flowTime = System.currentTimeMillis() - flowStartTime
+        
+        val debugInfo = "Vectors: ${flowVectors.size}, Features: ${previousFeatures.size}, AvgMag: %.1f, FlowTime: ${flowTime}ms".format(
             flowVectors.map { it.magnitude }.average().takeIf { !it.isNaN() } ?: 0.0
         )
+        
+        android.util.Log.d("OpticalFlow", "FLOW_CALCULATION_TIME: ${flowTime}ms for ${previousFeatures.size} features")
         
         return DetectionResult(riderDetected, confidence, debugInfo)
     }
@@ -148,7 +163,7 @@ class OpticalFlowRiderDetector : RiderDetector() {
         currentFrame: Bitmap, 
         feature: FeaturePoint
     ): FeaturePoint? {
-        val windowSize = 15
+        val windowSize = 11  // Reduced from 15 to 11 for performance
         val halfWindow = windowSize / 2
         
         val fx = feature.x.toInt()
@@ -170,9 +185,9 @@ class OpticalFlowRiderDetector : RiderDetector() {
             var bestY = fy
             var bestScore = Double.MAX_VALUE
             
-            val searchRadius = 20
-            for (dy in -searchRadius..searchRadius step 2) {
-                for (dx in -searchRadius..searchRadius step 2) {
+            val searchRadius = 12  // Reduced from 20 to 12 for performance
+            for (dy in -searchRadius..searchRadius step 3) {  // Increased step from 2 to 3
+                for (dx in -searchRadius..searchRadius step 3) {
                     val newX = fx + dx
                     val newY = fy + dy
                     
@@ -237,8 +252,8 @@ class OpticalFlowRiderDetector : RiderDetector() {
         val height = bitmap.height
         
         // Use a simple corner detection (approximation of Harris corner detector)
-        for (y in 10 until height - 10 step 8) {
-            for (x in 10 until width - 10 step 8) {
+        for (y in 15 until height - 15 step 12) {  // Increased step for fewer features
+            for (x in 15 until width - 15 step 12) {
                 val cornerStrength = calculateCornerStrength(bitmap, x, y)
                 if (cornerStrength > 1000) { // threshold for corner detection
                     // Check minimum distance from existing features
@@ -355,24 +370,36 @@ class OpticalFlowRiderDetector : RiderDetector() {
         // Create a grayscale bitmap from Y plane
         val bitmap = Bitmap.createBitmap(width + rowPadding / pixelStride, height, Bitmap.Config.ARGB_8888)
         
-        // Convert Y plane to grayscale pixels
+        // Convert Y plane to grayscale pixels using setPixels for speed
         val data = ByteArray(yBuffer.remaining())
         yBuffer.get(data)
         
+        // Create pixel array for batch setting - much faster than setPixel
+        val pixels = IntArray(width * height)
         var offset = 0
+        var pixelIndex = 0
+        
         for (y in 0 until height) {
             for (x in 0 until width) {
-                val pixel = data[offset].toInt() and 0xFF
-                val color = Color.rgb(pixel, pixel, pixel)
-                bitmap.setPixel(x, y, color)
+                val yValue = data[offset].toInt() and 0xFF
+                pixels[pixelIndex++] = Color.rgb(yValue, yValue, yValue)
                 offset += pixelStride
             }
             offset += rowPadding
         }
         
+        // Set all pixels at once
+        bitmap.setPixels(pixels, 0, width, 0, 0, width, height)
+        
         // Return a downscaled version for performance (optical flow needs smaller images)
-        val scaledWidth = minOf(width / 2, 320)
-        val scaledHeight = minOf(height / 2, 240)
+        // Maintain aspect ratio when downscaling
+        val maxDimension = 320
+        val scale = minOf(maxDimension.toFloat() / width, maxDimension.toFloat() / height)
+        val scaledWidth = (width * scale).toInt()
+        val scaledHeight = (height * scale).toInt()
+        
+        android.util.Log.d("OpticalFlow", "DOWNSCALE: original=${width}x${height}, scaled=${scaledWidth}x${scaledHeight}, scale=$scale")
+        
         return Bitmap.createScaledBitmap(bitmap, scaledWidth, scaledHeight, true).also {
             bitmap.recycle()
         }
@@ -467,7 +494,9 @@ class OpticalFlowRiderDetector : RiderDetector() {
         private val flowVectors: List<FlowVector>,
         private val features: List<FeaturePoint>,
         private val imageWidth: Int,
-        private val imageHeight: Int
+        private val imageHeight: Int,
+        private val flowImageWidth: Int,
+        private val flowImageHeight: Int
     ) : GraphicOverlay.Graphic(overlay) {
         
         private val vectorPaint = Paint().apply {
@@ -483,7 +512,7 @@ class OpticalFlowRiderDetector : RiderDetector() {
         }
         
         override fun draw(canvas: Canvas) {
-            // Use the dynamic camera aspect ratio from GraphicOverlay (same as MotionGraphic)
+            // Use the same approach as MotionGraphic - calculate preview area directly
             val overlayWidth = getOverlayWidth()
             val overlayHeight = getOverlayHeight()
             val cameraAspectRatio = getCameraAspectRatio()
@@ -508,14 +537,81 @@ class OpticalFlowRiderDetector : RiderDetector() {
                 previewTop = (overlayHeight - previewHeight) / 2
             }
             
-            // Draw flow vectors - use translateX/Y like other graphics
-            for (vector in flowVectors) {
-                // Scale coordinates to match the original camera image space
-                val scaleFactor = imageWidth.toFloat() / getOverlayImageWidth().toFloat()
-                val startX = translateX(vector.startPoint.x * scaleFactor)
-                val startY = translateY(vector.startPoint.y * scaleFactor)
-                val endX = translateX(vector.endPoint.x * scaleFactor)
-                val endY = translateY(vector.endPoint.y * scaleFactor)
+            // Get the actual downscaled image dimensions from the first frame
+            // We know the optical flow processing uses downscaled images
+            val overlayImageWidth = getOverlayImageWidth()
+            val overlayImageHeight = getOverlayImageHeight()
+            
+            // Debug logging
+            android.util.Log.d("OpticalFlow", "DEBUG: overlaySize=${overlayWidth}x${overlayHeight}, " +
+                    "previewBounds=($previewLeft,$previewTop)-($previewWidth,$previewHeight), " +
+                    "overlayImageSize=${overlayImageWidth}x${overlayImageHeight}, " +
+                    "originalImageSize=${imageWidth}x${imageHeight}, " +
+                    "cameraAspect=$cameraAspectRatio, viewAspect=$viewAspectRatio")
+            
+            // The optical flow coordinates are in downscaled image space
+            // We need to scale them directly to the preview area
+            // Based on logs: optical flow X ~150-200, Y ~10-80, so likely ~320x240 or similar
+            
+            // Let's directly scale from optical flow coordinate space to preview space
+            // We'll assume the optical flow image maintains aspect ratio with original
+            val flowImageAspectRatio = imageWidth.toFloat() / imageHeight.toFloat() // 640/480 = 1.33
+            
+            // Use the actual optical flow image dimensions
+            val actualFlowWidth = flowImageWidth.toFloat()
+            val actualFlowHeight = flowImageHeight.toFloat()
+            
+            // The optical flow image maintains the camera aspect ratio, but the preview area
+            // might be letterboxed/pillarboxed. We need to scale uniformly to maintain aspect ratio.
+            val flowAspectRatio = actualFlowWidth / actualFlowHeight
+            val previewAspectRatio = previewWidth / previewHeight
+            
+            val scale = if (flowAspectRatio > previewAspectRatio) {
+                // Flow is wider relative to its height than preview - constrain by width
+                previewWidth / actualFlowWidth
+            } else {
+                // Flow is taller relative to its width than preview - constrain by height
+                previewHeight / actualFlowHeight
+            }
+            
+            val scaleX = scale
+            val scaleY = scale
+            
+            // Calculate the actual size of the scaled optical flow content
+            val scaledFlowWidth = actualFlowWidth * scale
+            val scaledFlowHeight = actualFlowHeight * scale
+            
+            // Center the optical flow content within the preview area
+            val offsetX = (previewWidth - scaledFlowWidth) / 2f
+            val offsetY = (previewHeight - scaledFlowHeight) / 2f
+            
+            android.util.Log.d("OpticalFlow", "ASPECT_RATIO_FIX: flowAspect=$flowAspectRatio, previewAspect=$previewAspectRatio, uniformScale=$scale, offset=($offsetX,$offsetY)")
+            
+            // Debug: Draw some test points to see coordinate mapping
+            val testPaint = Paint().apply {
+                color = Color.MAGENTA
+                strokeWidth = 8f
+                style = Paint.Style.FILL
+            }
+            
+            // Draw test points at corners of the expected area
+            canvas.drawCircle(previewLeft, previewTop, 15f, testPaint) // Top-left
+            canvas.drawCircle(previewLeft + previewWidth, previewTop, 15f, testPaint) // Top-right
+            canvas.drawCircle(previewLeft, previewTop + previewHeight, 15f, testPaint) // Bottom-left
+            canvas.drawCircle(previewLeft + previewWidth, previewTop + previewHeight, 15f, testPaint) // Bottom-right
+            
+            // Draw flow vectors
+            for ((index, vector) in flowVectors.withIndex()) {
+                // Map optical flow coordinates directly to preview coordinates with centering offset
+                val startX = previewLeft + offsetX + (vector.startPoint.x * scaleX)
+                val startY = previewTop + offsetY + (vector.startPoint.y * scaleY)
+                val endX = previewLeft + offsetX + (vector.endPoint.x * scaleX)
+                val endY = previewTop + offsetY + (vector.endPoint.y * scaleY)
+                
+                // Debug logging for first few vectors
+                if (index < 3) {
+                    android.util.Log.d("OpticalFlow", "Vector $index: optical(${vector.startPoint.x},${vector.startPoint.y}) -> screen($startX,$startY)")
+                }
                 
                 canvas.drawLine(startX, startY, endX, endY, vectorPaint)
                 
@@ -535,9 +631,8 @@ class OpticalFlowRiderDetector : RiderDetector() {
             
             // Draw feature points
             for (feature in features) {
-                val scaleFactor = imageWidth.toFloat() / getOverlayImageWidth().toFloat()
-                val x = translateX(feature.x * scaleFactor)
-                val y = translateY(feature.y * scaleFactor)
+                val x = previewLeft + offsetX + (feature.x * scaleX)
+                val y = previewTop + offsetY + (feature.y * scaleY)
                 canvas.drawCircle(x, y, 3f, featurePaint)
             }
         }

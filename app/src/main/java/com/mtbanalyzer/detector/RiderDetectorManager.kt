@@ -81,6 +81,12 @@ class RiderDetectorManager(
         detectorCallback = callback
     }
     
+    private var processingTimeCallback: ((Long) -> Unit)? = null
+    
+    fun setProcessingTimeCallback(callback: (Long) -> Unit) {
+        processingTimeCallback = callback
+    }
+    
     /**
      * Process a camera frame
      */
@@ -92,9 +98,16 @@ class RiderDetectorManager(
             return
         }
         
+        val startTime = System.currentTimeMillis()
+        
         CoroutineScope(Dispatchers.Main).launch {
             try {
                 val result = detector.processFrame(imageProxy, graphicOverlay)
+                
+                // Measure actual processing time and report it
+                val processingTime = System.currentTimeMillis() - startTime
+                processingTimeCallback?.invoke(processingTime)
+                
                 handleDetectionResult(result)
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing frame", e)
@@ -190,7 +203,7 @@ class RiderDetectorManager(
             }
             
             DETECTOR_OPTICAL_FLOW -> {
-                OpticalFlowRiderDetector()
+                OpticalFlowRiderDetectorFast()
             }
             
             else -> {

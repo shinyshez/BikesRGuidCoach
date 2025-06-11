@@ -57,6 +57,11 @@ class RiderDetectionProcessor(
                 callback?.onUpdateUI(riderDetected, confidence, debugInfo)
             }
         })
+        
+        // Set up processing time callback to track actual async processing time
+        detectorManager.setProcessingTimeCallback { processingTime ->
+            performanceMonitor.onDetectorProcessed(processingTime)
+        }
     }
 
     fun setCallback(callback: RiderDetectionCallback) {
@@ -91,14 +96,9 @@ class RiderDetectionProcessor(
                 // Note: Image source info is set by CameraManager with actual preview dimensions
                 
                 if (isDetectionEnabled) {
-                    val detectorStartTime = System.currentTimeMillis()
-                    
                     // Process frame with current detector - manager will handle closing the imageProxy
+                    // Actual processing time is now tracked via the callback in init
                     detectorManager.processFrame(imageProxy, graphicOverlay)
-                    
-                    // Track detector processing time
-                    val detectorTime = System.currentTimeMillis() - detectorStartTime
-                    performanceMonitor.onDetectorProcessed(detectorTime)
                     
                     // Handle recording logic
                     handleRecordingLogic()
