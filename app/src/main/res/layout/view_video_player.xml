@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="utf-8"?>
+<merge xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <!-- Video View -->
+    <VideoView
+        android:id="@+id/videoView"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- Frame ImageView for precise frame display -->
+    <ImageView
+        android:id="@+id/frameImageView"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:scaleType="fitCenter"
+        android:visibility="gone"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- Pose detection overlay -->
+    <com.mtbanalyzer.GraphicOverlay
+        android:id="@+id/graphic_overlay"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- Loading indicator -->
+    <ProgressBar
+        android:id="@+id/loadingIndicator"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:visibility="visible"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- Bottom controls bar -->
+    <LinearLayout
+        android:id="@+id/bottomControlsBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="@drawable/controls_gradient_bottom"
+        android:padding="16dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <!-- Time display and seekbar -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/timeDisplay"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="0:00 / 0:00"
+                android:textColor="@android:color/white"
+                android:textSize="14sp"
+                android:layout_marginEnd="16dp" />
+
+            <SeekBar
+                android:id="@+id/seekBar"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:progressTint="@android:color/white"
+                android:thumbTint="@android:color/white"
+                android:progressBackgroundTint="#80FFFFFF" />
+
+        </LinearLayout>
+
+        <!-- Control buttons -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:layout_marginTop="8dp">
+
+            <ImageButton
+                android:id="@+id/frameBackwardButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:src="@android:drawable/ic_media_rew"
+                android:background="@drawable/button_circle_background"
+                android:contentDescription="Previous Frame"
+                android:layout_marginEnd="16dp" />
+
+            <ImageButton
+                android:id="@+id/playPauseButton"
+                android:layout_width="64dp"
+                android:layout_height="64dp"
+                android:src="@android:drawable/ic_media_play"
+                android:background="@drawable/button_circle_background"
+                android:contentDescription="Play/Pause"
+                android:layout_marginEnd="16dp" />
+
+            <ImageButton
+                android:id="@+id/frameForwardButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:src="@android:drawable/ic_media_ff"
+                android:background="@drawable/button_circle_background"
+                android:contentDescription="Next Frame"
+                android:layout_marginEnd="32dp" />
+
+            <Button
+                android:id="@+id/poseToggleButton"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:text="Show Pose"
+                android:textColor="@android:color/white"
+                android:background="@drawable/button_overlay_background" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+</merge>
