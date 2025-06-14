@@ -2,15 +2,23 @@
 <merge xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
-    <!-- MediaPlayer-Extended VideoView for frame-accurate seeking -->
-    <net.protyposis.android.mediaplayer.VideoView
-        android:id="@+id/videoView"
+    <!-- Wrapper FrameLayout to help with centering -->
+    <FrameLayout
         android:layout_width="0dp"
         android:layout_height="0dp"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
+        app:layout_constraintEnd_toEndOf="parent">
+        
+        <!-- MediaPlayer-Extended VideoView for frame-accurate seeking -->
+        <net.protyposis.android.mediaplayer.VideoView
+            android:id="@+id/videoView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_gravity="center" />
+            
+    </FrameLayout>
 
 
     <!-- Pose detection overlay -->

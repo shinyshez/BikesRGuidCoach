@@ -129,8 +129,10 @@ class VideoPlayerView @JvmOverloads constructor(
                 // Initialize frame tracking
                 currentFrameIndex = 0
                 
-                // Center and scale the video properly
-                centerVideoView()
+                // Center and scale the video properly with actual video dimensions
+                post {
+                    centerVideoView()
+                }
                 
                 // Notify listener
                 onVideoLoadedListener?.invoke(videoDuration)
@@ -190,33 +192,8 @@ class VideoPlayerView @JvmOverloads constructor(
     }
     
     private fun centerVideoView() {
-        // For standard VideoView, center using constraint layout
-        post {
-            val containerWidth = width
-            val containerHeight = height
-            
-            if (containerWidth == 0 || containerHeight == 0) {
-                // Container not measured yet, try again after layout
-                post { centerVideoView() }
-                return@post
-            }
-            
-            val layoutParams = videoView.layoutParams as ConstraintLayout.LayoutParams
-            
-            // Use constraint dimensions to maintain aspect ratio and center
-            layoutParams.width = ConstraintLayout.LayoutParams.MATCH_CONSTRAINT
-            layoutParams.height = ConstraintLayout.LayoutParams.MATCH_CONSTRAINT
-            
-            // Center the video
-            layoutParams.topToTop = ConstraintLayout.LayoutParams.PARENT_ID
-            layoutParams.bottomToBottom = ConstraintLayout.LayoutParams.PARENT_ID
-            layoutParams.startToStart = ConstraintLayout.LayoutParams.PARENT_ID
-            layoutParams.endToEnd = ConstraintLayout.LayoutParams.PARENT_ID
-            
-            videoView.layoutParams = layoutParams
-            
-            Log.d(TAG, "Centered video in ${containerWidth}x${containerHeight}")
-        }
+        // Let VideoView handle its own aspect ratio naturally
+        Log.d(TAG, "VideoView prepared - using native aspect ratio handling")
     }
     
     private fun setupControls() {
