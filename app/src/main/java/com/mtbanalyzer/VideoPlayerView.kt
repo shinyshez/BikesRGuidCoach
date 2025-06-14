@@ -1,7 +1,6 @@
 package com.mtbanalyzer
 
 import android.content.Context
-import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Handler
@@ -12,6 +11,10 @@ import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.widget.*
+import net.protyposis.android.mediaplayer.MediaPlayer
+import net.protyposis.android.mediaplayer.MediaSource
+import net.protyposis.android.mediaplayer.UriSource
+import net.protyposis.android.mediaplayer.VideoView as MediaPlayerVideoView
 import androidx.constraintlayout.widget.ConstraintLayout
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.pose.Pose
@@ -31,8 +34,7 @@ class VideoPlayerView @JvmOverloads constructor(
     }
     
     // UI Components
-    private lateinit var videoView: VideoView
-    private lateinit var frameImageView: ImageView
+    private lateinit var videoView: MediaPlayerVideoView
     private lateinit var graphicOverlay: GraphicOverlay
     private lateinit var playPauseButton: ImageButton
     private lateinit var frameForwardButton: ImageButton
@@ -46,6 +48,7 @@ class VideoPlayerView @JvmOverloads constructor(
     private var videoUri: Uri? = null
     private var isPlaying = false
     private var videoDuration = 0
+    private var mediaPlayer: MediaPlayer? = null
     
     // Pose detection
     private var isPoseDetectionEnabled = false
@@ -53,22 +56,11 @@ class VideoPlayerView @JvmOverloads constructor(
     private var processingJob: Job? = null
     private val coroutineScope = CoroutineScope(Dispatchers.IO)
     
-    // Frame extraction
-    private var mediaRetriever: MediaMetadataRetriever? = null
-    private var lastProcessedTime = -1L
-    private val frameProcessingInterval = 100L
-    
     // Frame stepping
-    private var isFrameSteppingMode = false
     private var currentFrameIndex = 0L
     private var totalFrames = 0L
     private var frameRate = 30.0
-    private var frameDurationUs = 33333L
-    private var currentPositionMs = 0
-    
-    // Seekbar throttling
-    private var seekFrameJob: Job? = null
-    private var lastSeekRequest = 0L
+    private var frameDurationMs = 33.333 // Milliseconds per frame (1000/30)
     
     // Frame button hold-to-repeat
     private var frameButtonHoldJob: Job? = null
@@ -91,7 +83,6 @@ class VideoPlayerView @JvmOverloads constructor(
     
     private fun initializeViews() {
         videoView = findViewById(R.id.videoView)
-        frameImageView = findViewById(R.id.frameImageView)
         graphicOverlay = findViewById(R.id.graphic_overlay)
         playPauseButton = findViewById(R.id.playPauseButton)
         frameForwardButton = findViewById(R.id.frameForwardButton)
@@ -100,6 +91,9 @@ class VideoPlayerView @JvmOverloads constructor(
         timeDisplay = findViewById(R.id.timeDisplay)
         poseToggleButton = findViewById(R.id.poseToggleButton)
         loadingIndicator = findViewById(R.id.loadingIndicator)
+        
+        // Log button initialization
+        Log.d(TAG, "Frame buttons initialized: forward=${frameForwardButton != null}, backward=${frameBackwardButton != null}")
     }
     
     private fun initializePoseDetector() {
@@ -113,25 +107,30 @@ class VideoPlayerView @JvmOverloads constructor(
     fun setVideo(uri: Uri) {
         videoUri = uri
         setupVideoView()
-        initializeMediaRetriever()
+        // Don't extract metadata here - wait for onPrepared
     }
     
     private fun setupVideoView() {
         try {
-            videoView.setVideoURI(videoUri)
+            // Use setDataSource for MediaPlayer-Extended
+            val mediaSource = UriSource(context, videoUri)
+            videoView.setVideoSource(mediaSource)
             
-            videoView.setOnPreparedListener { mediaPlayer ->
-                videoDuration = mediaPlayer.duration
+            videoView.setOnPreparedListener { mp ->
+                mediaPlayer = mp as MediaPlayer
+                videoDuration = videoView.duration
                 seekBar.max = videoDuration
                 updateTimeDisplay(0)
                 loadingIndicator.visibility = View.GONE
                 
+                // Extract metadata now that video is prepared
+                extractVideoMetadata()
+                
                 // Initialize frame tracking
-                currentPositionMs = 0
                 currentFrameIndex = 0
                 
                 // Center and scale the video properly
-                centerVideoView(mediaPlayer)
+                centerVideoView()
                 
                 // Notify listener
                 onVideoLoadedListener?.invoke(videoDuration)
@@ -155,25 +154,68 @@ class VideoPlayerView @JvmOverloads constructor(
         }
     }
     
-    private fun initializeMediaRetriever() {
+    private fun extractVideoMetadata() {
         try {
-            mediaRetriever = MediaMetadataRetriever().apply {
-                setDataSource(context, videoUri)
-                
-                val durationStr = extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
-                val frameRateStr = extractMetadata(MediaMetadataRetriever.METADATA_KEY_CAPTURE_FRAMERATE)
-                
-                val videoDurationMs = durationStr?.toLongOrNull() ?: videoDuration.toLong()
-                frameRate = frameRateStr?.toDoubleOrNull() ?: 30.0
-                frameDurationUs = (1_000_000.0 / frameRate).toLong()
-                totalFrames = ((videoDurationMs * frameRate) / 1000.0).toLong()
-                
-                Log.d(TAG, "Video properties: duration=${videoDurationMs}ms, frameRate=${frameRate}fps, totalFrames=$totalFrames")
+            val retriever = MediaMetadataRetriever()
+            retriever.setDataSource(context, videoUri)
+            
+            // Try to get frame rate from metadata
+            val frameRateStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CAPTURE_FRAMERATE)
+            
+            frameRate = frameRateStr?.toDoubleOrNull() ?: 30.0
+            frameDurationMs = 1000.0 / frameRate
+            totalFrames = ((videoDuration * frameRate) / 1000.0).toLong()
+            
+            // Get actual frame count if available
+            val frameCountStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_FRAME_COUNT)
+            frameCountStr?.toLongOrNull()?.let { actualFrameCount ->
+                if (actualFrameCount > 0) {
+                    totalFrames = actualFrameCount
+                    // Recalculate frame rate based on actual frame count
+                    frameRate = (totalFrames * 1000.0) / videoDuration
+                    frameDurationMs = 1000.0 / frameRate
+                }
             }
+            
+            retriever.release()
+            
+            Log.d(TAG, "Video metadata: frameRate=${frameRate}fps, totalFrames=$totalFrames, frameDurationMs=${frameDurationMs}ms, duration=${videoDuration}ms")
         } catch (e: Exception) {
-            Log.e(TAG, "Error initializing media retriever", e)
-            isPoseDetectionEnabled = false
-            poseToggleButton.isEnabled = false
+            Log.e(TAG, "Error extracting video metadata", e)
+            // Use defaults
+            frameRate = 30.0
+            frameDurationMs = 33.333
+            totalFrames = ((videoDuration * frameRate) / 1000.0).toLong()
+        }
+    }
+    
+    private fun centerVideoView() {
+        // For standard VideoView, center using constraint layout
+        post {
+            val containerWidth = width
+            val containerHeight = height
+            
+            if (containerWidth == 0 || containerHeight == 0) {
+                // Container not measured yet, try again after layout
+                post { centerVideoView() }
+                return@post
+            }
+            
+            val layoutParams = videoView.layoutParams as ConstraintLayout.LayoutParams
+            
+            // Use constraint dimensions to maintain aspect ratio and center
+            layoutParams.width = ConstraintLayout.LayoutParams.MATCH_CONSTRAINT
+            layoutParams.height = ConstraintLayout.LayoutParams.MATCH_CONSTRAINT
+            
+            // Center the video
+            layoutParams.topToTop = ConstraintLayout.LayoutParams.PARENT_ID
+            layoutParams.bottomToBottom = ConstraintLayout.LayoutParams.PARENT_ID
+            layoutParams.startToStart = ConstraintLayout.LayoutParams.PARENT_ID
+            layoutParams.endToEnd = ConstraintLayout.LayoutParams.PARENT_ID
+            
+            videoView.layoutParams = layoutParams
+            
+            Log.d(TAG, "Centered video in ${containerWidth}x${containerHeight}")
         }
     }
     
@@ -198,11 +240,6 @@ class VideoPlayerView @JvmOverloads constructor(
     }
     
     private fun setupFrameStepButtons() {
-        // Forward button - single click
-        frameForwardButton.setOnClickListener {
-            stepFrame(forward = true)
-        }
-        
         // Forward button - hold to repeat
         frameForwardButton.setOnTouchListener { _, event ->
             when (event.action) {
@@ -220,20 +257,26 @@ class VideoPlayerView @JvmOverloads constructor(
                             delay(frameButtonRepeatDelay)
                         }
                     }
-                    true
+                    // Return false to allow click events to also be processed
+                    false
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     frameButtonHoldJob?.cancel()
                     frameButtonHoldJob = null
-                    true
+                    // Return false to allow click events to also be processed
+                    false
                 }
                 else -> false
             }
         }
         
-        // Backward button - single click
-        frameBackwardButton.setOnClickListener {
-            stepFrame(forward = false)
+        // Forward button - single click (as fallback)
+        frameForwardButton.setOnClickListener {
+            Log.d(TAG, "Forward button clicked")
+            // Only step if not already handled by touch listener
+            if (frameButtonHoldJob == null || !frameButtonHoldJob!!.isActive) {
+                stepFrame(forward = true)
+            }
         }
         
         // Backward button - hold to repeat
@@ -253,14 +296,25 @@ class VideoPlayerView @JvmOverloads constructor(
                             delay(frameButtonRepeatDelay)
                         }
                     }
-                    true
+                    // Return false to allow click events to also be processed
+                    false
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     frameButtonHoldJob?.cancel()
                     frameButtonHoldJob = null
-                    true
+                    // Return false to allow click events to also be processed
+                    false
                 }
                 else -> false
+            }
+        }
+        
+        // Backward button - single click (as fallback)
+        frameBackwardButton.setOnClickListener {
+            Log.d(TAG, "Backward button clicked")
+            // Only step if not already handled by touch listener
+            if (frameButtonHoldJob == null || !frameButtonHoldJob!!.isActive) {
+                stepFrame(forward = false)
             }
         }
     }
@@ -269,63 +323,29 @@ class VideoPlayerView @JvmOverloads constructor(
         seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 if (fromUser) {
-                    currentPositionMs = progress
+                    // Update our tracking variables
                     currentFrameIndex = ((progress * frameRate) / 1000.0).toLong()
                     updateTimeDisplay(progress)
                     
-                    seekFrameJob?.cancel()
-                    lastSeekRequest = System.currentTimeMillis()
-                    
-                    seekFrameJob = coroutineScope.launch {
-                        val requestTime = lastSeekRequest
-                        delay(50)
-                        
-                        if (requestTime == lastSeekRequest) {
-                            try {
-                                val frameTimeUs = currentFrameIndex * frameDurationUs
-                                val frameBitmap = withContext(Dispatchers.IO) {
-                                    mediaRetriever?.getFrameAtTime(frameTimeUs, MediaMetadataRetriever.OPTION_CLOSEST)
-                                }
-                                
-                                withContext(Dispatchers.Main) {
-                                    if (requestTime == lastSeekRequest && frameBitmap != null) {
-                                        frameImageView.setImageBitmap(frameBitmap)
-                                        frameImageView.visibility = View.VISIBLE
-                                        isFrameSteppingMode = true
-                                        
-                                        if (isPoseDetectionEnabled) {
-                                            processBitmapForPose(frameBitmap)
-                                        }
-                                    }
-                                    videoView.seekTo(progress)
-                                }
-                            } catch (e: Exception) {
-                                Log.e(TAG, "Error extracting frame during seek", e)
-                                withContext(Dispatchers.Main) {
-                                    videoView.seekTo(progress)
-                                }
-                            }
-                        }
-                    }
+                    // Perform seeking with MediaPlayer-Extended
+                    videoView.seekTo(progress)
                 }
             }
             
             override fun onStartTrackingTouch(seekBar: SeekBar?) {
+                // Pause video during seeking
                 if (isPlaying) {
                     pause()
                 }
             }
             
-            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                // Video stays paused after seeking for frame analysis
+            }
         })
     }
     
     fun play() {
-        if (isFrameSteppingMode) {
-            frameImageView.visibility = View.GONE
-            isFrameSteppingMode = false
-        }
-        
         videoView.start()
         isPlaying = true
         playPauseButton.setImageResource(android.R.drawable.ic_media_pause)
@@ -347,6 +367,7 @@ class VideoPlayerView @JvmOverloads constructor(
     fun seekTo(position: Int) {
         videoView.seekTo(position)
         seekBar.progress = position
+        currentFrameIndex = ((position * frameRate) / 1000.0).toLong()
         updateTimeDisplay(position)
     }
     
@@ -357,56 +378,65 @@ class VideoPlayerView @JvmOverloads constructor(
     fun isPlaying(): Boolean = isPlaying
     
     private fun stepFrame(forward: Boolean) {
+        Log.d(TAG, "stepFrame called: forward=$forward, frameRate=$frameRate, frameDurationMs=$frameDurationMs")
+        
         if (isPlaying) {
             pause()
         }
         
-        val newFrameIndex = if (forward) {
-            minOf(currentFrameIndex + 1, totalFrames - 1)
+        // Get current position
+        val currentPos = videoView.currentPosition
+        Log.d(TAG, "Current position: $currentPos ms, duration: $videoDuration ms")
+        
+        // Simple approach: step by a fixed amount (33ms ~= 30fps)
+        val stepSize = if (frameDurationMs > 0) frameDurationMs.toInt() else 33
+        
+        val newPosition = if (forward) {
+            minOf(currentPos + stepSize, videoDuration - 1)
         } else {
-            maxOf(currentFrameIndex - 1, 0)
+            maxOf(currentPos - stepSize, 0)
         }
         
-        if (newFrameIndex == currentFrameIndex) {
+        if (newPosition == currentPos) {
+            Log.d(TAG, "Already at boundary: currentPos=$currentPos, newPosition=$newPosition")
             return
         }
         
-        currentFrameIndex = newFrameIndex
-        
-        val frameTimeUs = currentFrameIndex * frameDurationUs
-        val frameTimeMs = (frameTimeUs / 1000).toInt()
-        
-        currentPositionMs = frameTimeMs
-        
-        seekBar.progress = frameTimeMs
-        updateTimeDisplay(frameTimeMs)
-        
-        coroutineScope.launch {
-            try {
-                val frameBitmap = withContext(Dispatchers.IO) {
-                    mediaRetriever?.getFrameAtTime(frameTimeUs, MediaMetadataRetriever.OPTION_CLOSEST)
-                }
-                
-                withContext(Dispatchers.Main) {
-                    if (frameBitmap != null) {
-                        frameImageView.setImageBitmap(frameBitmap)
-                        frameImageView.visibility = View.VISIBLE
-                        isFrameSteppingMode = true
-                    }
-                    
-                    videoView.seekTo(frameTimeMs)
-                    
-                    if (isPoseDetectionEnabled && frameBitmap != null) {
-                        processBitmapForPose(frameBitmap)
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error extracting frame", e)
-                withContext(Dispatchers.Main) {
-                    videoView.seekTo(frameTimeMs)
-                }
-            }
+        // Calculate frame index for display
+        currentFrameIndex = if (frameDurationMs > 0) {
+            (newPosition / frameDurationMs).toLong()
+        } else {
+            (newPosition / 33.333).toLong()
         }
+        
+        Log.d(TAG, "Seeking from $currentPos to $newPosition (frame $currentFrameIndex)")
+        
+        // Update UI immediately for responsiveness
+        seekBar.progress = newPosition
+        updateTimeDisplay(newPosition)
+        
+        // Use MediaPlayer-Extended's precise frame-accurate seeking
+        videoView.seekTo(newPosition)
+        
+        // Force a pause to ensure frame is displayed
+        if (!isPlaying) {
+            videoView.pause()
+        }
+        
+        // Process pose detection after a small delay to ensure seek is complete
+        mainHandler.postDelayed({
+            val actualPos = videoView.currentPosition
+            Log.d(TAG, "After seek: target=$newPosition, actual position=${actualPos}ms")
+            
+            // Update UI with actual position
+            updateTimeDisplay(actualPos)
+            seekBar.progress = actualPos
+            
+            // Process pose detection on current frame if enabled
+            if (isPoseDetectionEnabled) {
+                processCurrentFrameForPose()
+            }
+        }, 100)
     }
     
     private fun togglePoseDetection() {
@@ -420,7 +450,7 @@ class VideoPlayerView @JvmOverloads constructor(
                 if (isPlaying) {
                     startPoseProcessing()
                 } else {
-                    processCurrentFrame()
+                    processCurrentFrameForPose()
                 }
             }
         } else {
@@ -442,14 +472,8 @@ class VideoPlayerView @JvmOverloads constructor(
     private fun startPoseProcessing() {
         processingJob = coroutineScope.launch {
             while (isActive && isPoseDetectionEnabled && isPlaying) {
-                val currentPosition = videoView.currentPosition.toLong()
-                
-                if (currentPosition - lastProcessedTime >= frameProcessingInterval) {
-                    processFrameAtTime(currentPosition * 1000)
-                    lastProcessedTime = currentPosition
-                }
-                
-                delay(50)
+                processCurrentFrameForPose()
+                delay(100) // Process every 100ms during playback
             }
         }
     }
@@ -458,41 +482,37 @@ class VideoPlayerView @JvmOverloads constructor(
         processingJob?.cancel()
     }
     
-    private fun processCurrentFrame() {
-        val currentPosition = videoView.currentPosition.toLong()
+    private fun processCurrentFrameForPose() {
         coroutineScope.launch {
-            processFrameAtTime(currentPosition * 1000)
-        }
-    }
-    
-    private suspend fun processFrameAtTime(timeUs: Long) {
-        try {
-            val bitmap = withContext(Dispatchers.IO) {
-                mediaRetriever?.getFrameAtTime(timeUs)
-            }
-            
-            if (bitmap != null) {
-                processBitmapForPose(bitmap)
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error extracting frame at time $timeUs", e)
-        }
-    }
-    
-    private suspend fun processBitmapForPose(bitmap: Bitmap) {
-        val inputImage = InputImage.fromBitmap(bitmap, 0)
-        
-        poseDetector.process(inputImage)
-            .addOnSuccessListener { pose ->
-                mainHandler.post {
-                    if (isPoseDetectionEnabled) {
-                        updatePoseOverlay(pose, bitmap.width, bitmap.height)
-                    }
+            try {
+                // Extract current frame using MediaMetadataRetriever for pose detection
+                val retriever = MediaMetadataRetriever()
+                retriever.setDataSource(context, videoUri)
+                
+                val currentPosition = getCurrentPosition().toLong()
+                val bitmap = retriever.getFrameAtTime(currentPosition * 1000, MediaMetadataRetriever.OPTION_CLOSEST)
+                
+                retriever.release()
+                
+                if (bitmap != null) {
+                    val inputImage = InputImage.fromBitmap(bitmap, 0)
+                    
+                    poseDetector.process(inputImage)
+                        .addOnSuccessListener { pose ->
+                            mainHandler.post {
+                                if (isPoseDetectionEnabled) {
+                                    updatePoseOverlay(pose, bitmap.width, bitmap.height)
+                                }
+                            }
+                        }
+                        .addOnFailureListener { e ->
+                            Log.e(TAG, "Pose detection failed", e)
+                        }
                 }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error processing frame for pose detection", e)
             }
-            .addOnFailureListener { e ->
-                Log.e(TAG, "Pose detection failed", e)
-            }
+        }
     }
     
     private fun updatePoseOverlay(pose: Pose, imageWidth: Int, imageHeight: Int) {
@@ -508,17 +528,26 @@ class VideoPlayerView @JvmOverloads constructor(
     }
     
     private fun updateTimeDisplay(position: Int) {
-        val currentSec = position / 1000
-        val totalSec = videoDuration / 1000
-        val currentMin = currentSec / 60
-        val currentSecRem = currentSec % 60
-        val totalMin = totalSec / 60
-        val totalSecRem = totalSec % 60
-        
-        val displayFrameIndex = ((position * frameRate) / 1000.0).toLong()
-        
-        timeDisplay.text = String.format("%d:%02d / %d:%02d (Frame %d/%d)", 
-            currentMin, currentSecRem, totalMin, totalSecRem, displayFrameIndex, totalFrames)
+        try {
+            val currentSec = position / 1000
+            val totalSec = videoDuration / 1000
+            val currentMin = currentSec / 60
+            val currentSecRem = currentSec % 60
+            val totalMin = totalSec / 60
+            val totalSecRem = totalSec % 60
+            
+            val displayFrameIndex = if (frameRate > 0 && position >= 0) {
+                ((position.toDouble() * frameRate) / 1000.0).toLong().coerceIn(0, totalFrames)
+            } else {
+                0L
+            }
+            
+            timeDisplay.text = String.format("%d:%02d / %d:%02d (Frame %d/%d)", 
+                currentMin, currentSecRem, totalMin, totalSecRem, displayFrameIndex, totalFrames)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error updating time display", e)
+            timeDisplay.text = "0:00 / 0:00 (Frame 0/0)"
+        }
     }
     
     private fun startSeekBarUpdater() {
@@ -527,6 +556,7 @@ class VideoPlayerView @JvmOverloads constructor(
                 if (isPlaying && videoView.isPlaying) {
                     val currentPosition = videoView.currentPosition
                     seekBar.progress = currentPosition
+                    currentFrameIndex = ((currentPosition * frameRate) / 1000.0).toLong()
                     updateTimeDisplay(currentPosition)
                 }
                 mainHandler.postDelayed(this, 100)
@@ -547,73 +577,14 @@ class VideoPlayerView @JvmOverloads constructor(
         onVideoCompletionListener = listener
     }
     
-    private fun centerVideoView(mediaPlayer: android.media.MediaPlayer) {
-        val videoWidth = mediaPlayer.videoWidth
-        val videoHeight = mediaPlayer.videoHeight
-        
-        if (videoWidth == 0 || videoHeight == 0) {
-            Log.w(TAG, "Video dimensions are zero, cannot center")
-            return
-        }
-        
-        // Get container dimensions
-        val containerWidth = width
-        val containerHeight = height
-        
-        if (containerWidth == 0 || containerHeight == 0) {
-            // Container not measured yet, try again after layout
-            post { centerVideoView(mediaPlayer) }
-            return
-        }
-        
-        // Calculate video aspect ratio
-        val videoAspectRatio = videoWidth.toFloat() / videoHeight.toFloat()
-        val containerAspectRatio = containerWidth.toFloat() / containerHeight.toFloat()
-        
-        val layoutParams = videoView.layoutParams as ConstraintLayout.LayoutParams
-        
-        if (videoAspectRatio > containerAspectRatio) {
-            // Video is wider than container - fill width completely, center vertically
-            layoutParams.width = ConstraintLayout.LayoutParams.MATCH_CONSTRAINT
-            layoutParams.height = ConstraintLayout.LayoutParams.MATCH_CONSTRAINT
-            layoutParams.dimensionRatio = "${videoWidth}:${videoHeight}"
-        } else {
-            // Video is taller than container - fill height completely, center horizontally  
-            layoutParams.width = ConstraintLayout.LayoutParams.MATCH_CONSTRAINT
-            layoutParams.height = ConstraintLayout.LayoutParams.MATCH_CONSTRAINT
-            layoutParams.dimensionRatio = "${videoWidth}:${videoHeight}"
-        }
-        
-        // Center the video and ensure it fills as much as possible
-        layoutParams.topToTop = ConstraintLayout.LayoutParams.PARENT_ID
-        layoutParams.bottomToBottom = ConstraintLayout.LayoutParams.PARENT_ID
-        layoutParams.startToStart = ConstraintLayout.LayoutParams.PARENT_ID
-        layoutParams.endToEnd = ConstraintLayout.LayoutParams.PARENT_ID
-        
-        videoView.layoutParams = layoutParams
-        
-        // Also apply the same centering to the frame ImageView
-        val frameLayoutParams = frameImageView.layoutParams as ConstraintLayout.LayoutParams
-        frameLayoutParams.width = ConstraintLayout.LayoutParams.MATCH_CONSTRAINT
-        frameLayoutParams.height = ConstraintLayout.LayoutParams.MATCH_CONSTRAINT
-        frameLayoutParams.dimensionRatio = "${videoWidth}:${videoHeight}"
-        frameLayoutParams.topToTop = ConstraintLayout.LayoutParams.PARENT_ID
-        frameLayoutParams.bottomToBottom = ConstraintLayout.LayoutParams.PARENT_ID
-        frameLayoutParams.startToStart = ConstraintLayout.LayoutParams.PARENT_ID
-        frameLayoutParams.endToEnd = ConstraintLayout.LayoutParams.PARENT_ID
-        frameImageView.layoutParams = frameLayoutParams
-        
-        Log.d(TAG, "Centered video: ${videoWidth}x${videoHeight} (${String.format("%.2f", videoAspectRatio)}) in ${containerWidth}x${containerHeight} (${String.format("%.2f", containerAspectRatio)})")
-    }
-    
     fun release() {
         try {
             videoView.stopPlayback()
+            mediaPlayer?.release()
+            mediaPlayer = null
             poseDetector.close()
-            seekFrameJob?.cancel()
             frameButtonHoldJob?.cancel()
             coroutineScope.cancel()
-            mediaRetriever?.release()
         } catch (e: Exception) {
             Log.e(TAG, "Error releasing resources", e)
         }
