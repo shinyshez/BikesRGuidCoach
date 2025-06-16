@@ -1,5 +1,6 @@
 package com.mtbanalyzer
 
+import android.content.res.Configuration
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
@@ -212,6 +213,20 @@ class VideoPlaybackActivity : AppCompatActivity() {
         super.onPause()
         videoPlayerView.pause()
         mainHandler.removeCallbacks(hideControlsRunnable)
+    }
+    
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        Log.d(TAG, "Orientation changed: ${newConfig.orientation}")
+        
+        // Re-enable full screen mode after orientation change
+        enableFullScreenMode()
+        
+        // Trigger video re-layout
+        videoPlayerView.handleOrientationChange(newConfig)
+        
+        // Show controls briefly after orientation change
+        showControls()
     }
     
     override fun onDestroy() {

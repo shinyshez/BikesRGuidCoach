@@ -1,5 +1,6 @@
 package com.mtbanalyzer
 
+import android.content.res.Configuration
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
@@ -302,6 +303,15 @@ class VideoComparisonActivity : AppCompatActivity() {
             layoutToggleButton.setImageResource(android.R.drawable.ic_menu_view)
             isSideBySide = true
         }
+    }
+    
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        Log.d(TAG, "Orientation changed: ${newConfig.orientation}")
+        
+        // Trigger video re-layout for both players
+        videoPlayer1.handleOrientationChange(newConfig)
+        videoPlayer2.handleOrientationChange(newConfig)
     }
     
     override fun onPause() {

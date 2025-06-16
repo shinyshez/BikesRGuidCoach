@@ -1,6 +1,7 @@
 package com.mtbanalyzer
 
 import android.content.Context
+import android.content.res.Configuration
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Handler
@@ -552,6 +553,15 @@ class VideoPlayerView @JvmOverloads constructor(
     
     fun setOnVideoCompletionListener(listener: () -> Unit) {
         onVideoCompletionListener = listener
+    }
+    
+    fun handleOrientationChange(newConfig: Configuration) {
+        Log.d(TAG, "Configuration changed: ${newConfig.orientation}")
+        
+        // Re-center the video for the new orientation
+        post {
+            centerVideoView()
+        }
     }
     
     fun release() {
