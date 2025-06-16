@@ -2,6 +2,7 @@ package com.mtbanalyzer
 
 import android.content.ContentUris
 import android.content.Intent
+import android.content.res.Configuration
 import android.database.Cursor
 import android.net.Uri
 import android.os.Bundle
@@ -61,6 +62,25 @@ class VideoGalleryActivity : AppCompatActivity() {
         return true
     }
     
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        
+        // Update grid layout when orientation changes
+        val newColumnCount = getColumnCount()
+        val layoutManager = recyclerView.layoutManager as GridLayoutManager
+        layoutManager.spanCount = newColumnCount
+        
+        Log.d(TAG, "Orientation changed - using $newColumnCount columns")
+    }
+    
+    private fun getColumnCount(): Int {
+        return when (resources.configuration.orientation) {
+            Configuration.ORIENTATION_LANDSCAPE -> 3  // More columns in landscape
+            Configuration.ORIENTATION_PORTRAIT -> 2   // Standard columns in portrait
+            else -> 2  // Default fallback
+        }
+    }
+    
     private fun setupUI() {
         recyclerView = findViewById(R.id.recycler_view)
         emptyView = findViewById(R.id.empty_view)
@@ -78,7 +98,9 @@ class VideoGalleryActivity : AppCompatActivity() {
             }
         }
         
-        recyclerView.layoutManager = GridLayoutManager(this, 2)
+        // Set column count based on orientation
+        val columnCount = getColumnCount()
+        recyclerView.layoutManager = GridLayoutManager(this, columnCount)
         recyclerView.adapter = adapter
         
         // Setup compare mode controls
@@ -301,7 +323,7 @@ class VideoAdapter(
         Glide.with(holder.itemView.context)
             .load(video.uri)
             .apply(RequestOptions()
-                .centerCrop()
+                .fitCenter()
                 .placeholder(R.drawable.ic_launcher_foreground)
                 .error(R.drawable.ic_launcher_foreground))
             .into(holder.thumbnail)
