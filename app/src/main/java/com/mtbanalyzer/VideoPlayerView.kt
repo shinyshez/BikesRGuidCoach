@@ -12,11 +12,12 @@ import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.widget.*
-import net.protyposis.android.mediaplayer.MediaPlayer
-import net.protyposis.android.mediaplayer.MediaSource
-import net.protyposis.android.mediaplayer.UriSource
-import net.protyposis.android.mediaplayer.VideoView as MediaPlayerVideoView
 import androidx.constraintlayout.widget.ConstraintLayout
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
+import androidx.media3.common.VideoSize
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.PlayerView
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.pose.Pose
 import com.google.mlkit.vision.pose.PoseDetection
@@ -35,7 +36,7 @@ class VideoPlayerView @JvmOverloads constructor(
     }
     
     // UI Components
-    private lateinit var videoView: MediaPlayerVideoView
+    private lateinit var playerView: PlayerView
     private lateinit var graphicOverlay: GraphicOverlay
     private lateinit var playPauseButton: ImageButton
     private lateinit var frameForwardButton: ImageButton
@@ -45,11 +46,11 @@ class VideoPlayerView @JvmOverloads constructor(
     private lateinit var poseToggleButton: Button
     private lateinit var loadingIndicator: ProgressBar
     
-    // Video properties
+    // Media3 ExoPlayer
+    private var exoPlayer: ExoPlayer? = null
     private var videoUri: Uri? = null
     private var isPlaying = false
-    private var videoDuration = 0
-    private var mediaPlayer: MediaPlayer? = null
+    private var videoDuration = 0L
     
     // Pose detection
     private var isPoseDetectionEnabled = false
@@ -74,16 +75,18 @@ class VideoPlayerView @JvmOverloads constructor(
     private var onVideoCompletionListener: (() -> Unit)? = null
     
     private val mainHandler = Handler(Looper.getMainLooper())
+    private var seekBarUpdateRunnable: Runnable? = null
     
     init {
         LayoutInflater.from(context).inflate(R.layout.view_video_player, this, true)
         initializeViews()
         initializePoseDetector()
+        initializePlayer()
         setupControls()
     }
     
     private fun initializeViews() {
-        videoView = findViewById(R.id.videoView)
+        playerView = findViewById(R.id.playerView)
         graphicOverlay = findViewById(R.id.graphic_overlay)
         playPauseButton = findViewById(R.id.playPauseButton)
         frameForwardButton = findViewById(R.id.frameForwardButton)
@@ -93,8 +96,7 @@ class VideoPlayerView @JvmOverloads constructor(
         poseToggleButton = findViewById(R.id.poseToggleButton)
         loadingIndicator = findViewById(R.id.loadingIndicator)
         
-        // Log button initialization
-        Log.d(TAG, "Frame buttons initialized: forward=${frameForwardButton != null}, backward=${frameBackwardButton != null}")
+        Log.d(TAG, "Views initialized successfully")
     }
     
     private fun initializePoseDetector() {
@@ -105,56 +107,76 @@ class VideoPlayerView @JvmOverloads constructor(
         poseDetector = PoseDetection.getClient(options)
     }
     
-    fun setVideo(uri: Uri) {
-        videoUri = uri
-        setupVideoView()
-        // Don't extract metadata here - wait for onPrepared
+    private fun initializePlayer() {
+        exoPlayer = ExoPlayer.Builder(context)
+            .build()
+            
+        playerView.player = exoPlayer
+        playerView.useController = false // Use our custom controls
+        
+        // Set up player listeners
+        exoPlayer?.addListener(object : Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                when (playbackState) {
+                    Player.STATE_READY -> {
+                        videoDuration = exoPlayer?.duration ?: 0L
+                        seekBar.max = videoDuration.toInt()
+                        loadingIndicator.visibility = View.GONE
+                        
+                        // Extract metadata and initialize frame tracking
+                        extractVideoMetadata()
+                        currentFrameIndex = 0
+                        
+                        // Notify listener
+                        onVideoLoadedListener?.invoke(videoDuration.toInt())
+                        
+                        Log.d(TAG, "Video ready: duration=${videoDuration}ms")
+                    }
+                    Player.STATE_ENDED -> {
+                        isPlaying = false
+                        playPauseButton.setImageResource(android.R.drawable.ic_media_play)
+                        stopPoseProcessing()
+                        onVideoCompletionListener?.invoke()
+                    }
+                    Player.STATE_BUFFERING -> {
+                        loadingIndicator.visibility = View.VISIBLE
+                    }
+                    Player.STATE_IDLE -> {
+                        loadingIndicator.visibility = View.GONE
+                    }
+                }
+            }
+            
+            override fun onIsPlayingChanged(playing: Boolean) {
+                isPlaying = playing
+                playPauseButton.setImageResource(
+                    if (playing) android.R.drawable.ic_media_pause
+                    else android.R.drawable.ic_media_play
+                )
+                
+                if (playing && isPoseDetectionEnabled) {
+                    startPoseProcessing()
+                } else {
+                    stopPoseProcessing()
+                }
+            }
+            
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                Log.e(TAG, "ExoPlayer error: ${error.message}", error)
+                onVideoErrorListener?.invoke(error.errorCode, 0)
+            }
+            
+            override fun onVideoSizeChanged(videoSize: VideoSize) {
+                Log.d(TAG, "Video size: ${videoSize.width}x${videoSize.height}")
+            }
+        })
     }
     
-    private fun setupVideoView() {
-        try {
-            // Use setDataSource for MediaPlayer-Extended
-            val mediaSource = UriSource(context, videoUri)
-            videoView.setVideoSource(mediaSource)
-            
-            videoView.setOnPreparedListener { mp ->
-                mediaPlayer = mp as MediaPlayer
-                videoDuration = videoView.duration
-                seekBar.max = videoDuration
-                updateTimeDisplay(0)
-                loadingIndicator.visibility = View.GONE
-                
-                // Extract metadata now that video is prepared
-                extractVideoMetadata()
-                
-                // Initialize frame tracking
-                currentFrameIndex = 0
-                
-                // Center and scale the video properly with actual video dimensions
-                post {
-                    centerVideoView()
-                }
-                
-                // Notify listener
-                onVideoLoadedListener?.invoke(videoDuration)
-            }
-            
-            videoView.setOnCompletionListener {
-                isPlaying = false
-                playPauseButton.setImageResource(android.R.drawable.ic_media_play)
-                stopPoseProcessing()
-                onVideoCompletionListener?.invoke()
-            }
-            
-            videoView.setOnErrorListener { _, what, extra ->
-                Log.e(TAG, "Video error: what=$what, extra=$extra")
-                onVideoErrorListener?.invoke(what, extra)
-                true
-            }
-            
-        } catch (e: Exception) {
-            Log.e(TAG, "Error setting up video", e)
-        }
+    fun setVideo(uri: Uri) {
+        videoUri = uri
+        val mediaItem = MediaItem.fromUri(uri)
+        exoPlayer?.setMediaItem(mediaItem)
+        exoPlayer?.prepare()
     }
     
     private fun extractVideoMetadata() {
@@ -190,11 +212,6 @@ class VideoPlayerView @JvmOverloads constructor(
             frameDurationMs = 33.333
             totalFrames = ((videoDuration * frameRate) / 1000.0).toLong()
         }
-    }
-    
-    private fun centerVideoView() {
-        // Let VideoView handle its own aspect ratio naturally
-        Log.d(TAG, "VideoView prepared - using native aspect ratio handling")
     }
     
     private fun setupControls() {
@@ -235,23 +252,19 @@ class VideoPlayerView @JvmOverloads constructor(
                             delay(frameButtonRepeatDelay)
                         }
                     }
-                    // Return false to allow click events to also be processed
                     false
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     frameButtonHoldJob?.cancel()
                     frameButtonHoldJob = null
-                    // Return false to allow click events to also be processed
                     false
                 }
                 else -> false
             }
         }
         
-        // Forward button - single click (as fallback)
         frameForwardButton.setOnClickListener {
             Log.d(TAG, "Forward button clicked")
-            // Only step if not already handled by touch listener
             if (frameButtonHoldJob == null || !frameButtonHoldJob!!.isActive) {
                 stepFrame(forward = true)
             }
@@ -274,23 +287,19 @@ class VideoPlayerView @JvmOverloads constructor(
                             delay(frameButtonRepeatDelay)
                         }
                     }
-                    // Return false to allow click events to also be processed
                     false
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     frameButtonHoldJob?.cancel()
                     frameButtonHoldJob = null
-                    // Return false to allow click events to also be processed
                     false
                 }
                 else -> false
             }
         }
         
-        // Backward button - single click (as fallback)
         frameBackwardButton.setOnClickListener {
             Log.d(TAG, "Backward button clicked")
-            // Only step if not already handled by touch listener
             if (frameButtonHoldJob == null || !frameButtonHoldJob!!.isActive) {
                 stepFrame(forward = false)
             }
@@ -305,8 +314,8 @@ class VideoPlayerView @JvmOverloads constructor(
                     currentFrameIndex = ((progress * frameRate) / 1000.0).toLong()
                     updateTimeDisplay(progress)
                     
-                    // Perform seeking with MediaPlayer-Extended
-                    videoView.seekTo(progress)
+                    // Perform frame-accurate seeking with ExoPlayer
+                    exoPlayer?.seekTo(progress.toLong())
                 }
             }
             
@@ -324,34 +333,25 @@ class VideoPlayerView @JvmOverloads constructor(
     }
     
     fun play() {
-        videoView.start()
-        isPlaying = true
-        playPauseButton.setImageResource(android.R.drawable.ic_media_pause)
-        
-        if (isPoseDetectionEnabled) {
-            startPoseProcessing()
-        }
+        exoPlayer?.play()
+        // isPlaying will be updated by onIsPlayingChanged listener
     }
     
     fun pause() {
-        if (videoView.isPlaying) {
-            videoView.pause()
-        }
-        isPlaying = false
-        playPauseButton.setImageResource(android.R.drawable.ic_media_play)
-        stopPoseProcessing()
+        exoPlayer?.pause()
+        // isPlaying will be updated by onIsPlayingChanged listener
     }
     
     fun seekTo(position: Int) {
-        videoView.seekTo(position)
+        exoPlayer?.seekTo(position.toLong())
         seekBar.progress = position
         currentFrameIndex = ((position * frameRate) / 1000.0).toLong()
         updateTimeDisplay(position)
     }
     
-    fun getCurrentPosition(): Int = videoView.currentPosition
+    fun getCurrentPosition(): Int = exoPlayer?.currentPosition?.toInt() ?: 0
     
-    fun getDuration(): Int = videoDuration
+    fun getDuration(): Int = videoDuration.toInt()
     
     fun isPlaying(): Boolean = isPlaying
     
@@ -363,14 +363,14 @@ class VideoPlayerView @JvmOverloads constructor(
         }
         
         // Get current position
-        val currentPos = videoView.currentPosition
+        val currentPos = getCurrentPosition()
         Log.d(TAG, "Current position: $currentPos ms, duration: $videoDuration ms")
         
-        // Simple approach: step by a fixed amount (33ms ~= 30fps)
+        // Time-based stepping approach
         val stepSize = if (frameDurationMs > 0) frameDurationMs.toInt() else 33
         
         val newPosition = if (forward) {
-            minOf(currentPos + stepSize, videoDuration - 1)
+            minOf(currentPos + stepSize, videoDuration.toInt() - 1)
         } else {
             maxOf(currentPos - stepSize, 0)
         }
@@ -393,17 +393,12 @@ class VideoPlayerView @JvmOverloads constructor(
         seekBar.progress = newPosition
         updateTimeDisplay(newPosition)
         
-        // Use MediaPlayer-Extended's precise frame-accurate seeking
-        videoView.seekTo(newPosition)
-        
-        // Force a pause to ensure frame is displayed
-        if (!isPlaying) {
-            videoView.pause()
-        }
+        // Use ExoPlayer's frame-accurate seeking
+        exoPlayer?.seekTo(newPosition.toLong())
         
         // Process pose detection after a small delay to ensure seek is complete
         mainHandler.postDelayed({
-            val actualPos = videoView.currentPosition
+            val actualPos = getCurrentPosition()
             Log.d(TAG, "After seek: target=$newPosition, actual position=${actualPos}ms")
             
             // Update UI with actual position
@@ -508,7 +503,7 @@ class VideoPlayerView @JvmOverloads constructor(
     private fun updateTimeDisplay(position: Int) {
         try {
             val currentSec = position / 1000
-            val totalSec = videoDuration / 1000
+            val totalSec = videoDuration.toInt() / 1000
             val currentMin = currentSec / 60
             val currentSecRem = currentSec % 60
             val totalMin = totalSec / 60
@@ -529,10 +524,10 @@ class VideoPlayerView @JvmOverloads constructor(
     }
     
     private fun startSeekBarUpdater() {
-        val updateRunnable = object : Runnable {
+        seekBarUpdateRunnable = object : Runnable {
             override fun run() {
-                if (isPlaying && videoView.isPlaying) {
-                    val currentPosition = videoView.currentPosition
+                if (isPlaying && exoPlayer?.isPlaying == true) {
+                    val currentPosition = getCurrentPosition()
                     seekBar.progress = currentPosition
                     currentFrameIndex = ((currentPosition * frameRate) / 1000.0).toLong()
                     updateTimeDisplay(currentPosition)
@@ -540,7 +535,7 @@ class VideoPlayerView @JvmOverloads constructor(
                 mainHandler.postDelayed(this, 100)
             }
         }
-        mainHandler.post(updateRunnable)
+        mainHandler.post(seekBarUpdateRunnable!!)
     }
     
     fun setOnVideoLoadedListener(listener: (duration: Int) -> Unit) {
@@ -557,21 +552,21 @@ class VideoPlayerView @JvmOverloads constructor(
     
     fun handleOrientationChange(newConfig: Configuration) {
         Log.d(TAG, "Configuration changed: ${newConfig.orientation}")
-        
-        // Re-center the video for the new orientation
+        // Media3 PlayerView handles orientation changes automatically
         post {
-            centerVideoView()
+            playerView.requestLayout()
         }
     }
     
     fun release() {
         try {
-            videoView.stopPlayback()
-            mediaPlayer?.release()
-            mediaPlayer = null
+            exoPlayer?.release()
+            exoPlayer = null
             poseDetector.close()
             frameButtonHoldJob?.cancel()
+            processingJob?.cancel()
             coroutineScope.cancel()
+            seekBarUpdateRunnable?.let { mainHandler.removeCallbacks(it) }
         } catch (e: Exception) {
             Log.e(TAG, "Error releasing resources", e)
         }

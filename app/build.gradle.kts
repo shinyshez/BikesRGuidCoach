@@ -72,8 +72,10 @@ dependencies {
     // Coroutines for async operations
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     
-    // MediaPlayer-Extended for frame-accurate seeking
-    implementation("net.protyposis.android.mediaplayer:mediaplayer:4.5.0")
+    // androidx.media3 for frame-accurate seeking
+    implementation("androidx.media3:media3-exoplayer:1.2.1")
+    implementation("androidx.media3:media3-ui:1.2.1")
+    implementation("androidx.media3:media3-common:1.2.1")
 
     // Testing
     testImplementation("junit:junit:4.13.2")
