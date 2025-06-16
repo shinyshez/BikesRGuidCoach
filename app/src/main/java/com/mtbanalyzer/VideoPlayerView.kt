@@ -167,7 +167,23 @@ class VideoPlayerView @JvmOverloads constructor(
             }
             
             override fun onVideoSizeChanged(videoSize: VideoSize) {
-                Log.d(TAG, "Video size: ${videoSize.width}x${videoSize.height}")
+                Log.d(TAG, "Video size changed: ${videoSize.width}x${videoSize.height}")
+                // Update overlay when video size changes - wait for layout to complete
+                post {
+                    Log.d(TAG, "PlayerView size: ${playerView.width}x${playerView.height}")
+                    Log.d(TAG, "GraphicOverlay size: ${graphicOverlay.width}x${graphicOverlay.height}")
+                    
+                    // Force overlay to recalculate if it doesn't have proper dimensions yet
+                    if (graphicOverlay.width == 0 || graphicOverlay.height == 0) {
+                        Log.d(TAG, "GraphicOverlay not yet laid out, requesting layout")
+                        graphicOverlay.requestLayout()
+                        
+                        // Check again after a short delay
+                        postDelayed({
+                            Log.d(TAG, "After layout request - GraphicOverlay size: ${graphicOverlay.width}x${graphicOverlay.height}")
+                        }, 100)
+                    }
+                }
             }
         })
     }
@@ -418,12 +434,22 @@ class VideoPlayerView @JvmOverloads constructor(
         if (isPoseDetectionEnabled) {
             poseToggleButton.text = "Hide Pose"
             graphicOverlay.visibility = View.VISIBLE
+            Log.d(TAG, "Pose detection enabled - overlay visible: ${graphicOverlay.visibility == View.VISIBLE}")
             
+            // Ensure overlay has proper dimensions before processing
             graphicOverlay.post {
-                if (isPlaying) {
-                    startPoseProcessing()
+                Log.d(TAG, "GraphicOverlay dimensions when enabled: ${graphicOverlay.width}x${graphicOverlay.height}")
+                
+                // Force layout if needed
+                if (graphicOverlay.width == 0 || graphicOverlay.height == 0) {
+                    Log.d(TAG, "Forcing GraphicOverlay layout")
+                    graphicOverlay.requestLayout()
+                    graphicOverlay.postDelayed({
+                        Log.d(TAG, "After forced layout - GraphicOverlay: ${graphicOverlay.width}x${graphicOverlay.height}")
+                        startPoseProcessingIfReady()
+                    }, 50)
                 } else {
-                    processCurrentFrameForPose()
+                    startPoseProcessingIfReady()
                 }
             }
         } else {
@@ -431,6 +457,17 @@ class VideoPlayerView @JvmOverloads constructor(
             graphicOverlay.visibility = View.GONE
             graphicOverlay.clear()
             stopPoseProcessing()
+            Log.d(TAG, "Pose detection disabled")
+        }
+    }
+    
+    private fun startPoseProcessingIfReady() {
+        if (isPlaying) {
+            Log.d(TAG, "Starting pose processing during playback")
+            startPoseProcessing()
+        } else {
+            Log.d(TAG, "Processing current frame for pose detection")
+            processCurrentFrameForPose()
         }
     }
     
@@ -445,7 +482,12 @@ class VideoPlayerView @JvmOverloads constructor(
     private fun startPoseProcessing() {
         processingJob = coroutineScope.launch {
             while (isActive && isPoseDetectionEnabled && isPlaying) {
-                processCurrentFrameForPose()
+                // Switch to main thread to call processCurrentFrameForPose (which needs getCurrentPosition)
+                withContext(Dispatchers.Main) {
+                    if (isPoseDetectionEnabled && isPlaying) {
+                        processCurrentFrameForPose()
+                    }
+                }
                 delay(100) // Process every 100ms during playback
             }
         }
@@ -456,22 +498,28 @@ class VideoPlayerView @JvmOverloads constructor(
     }
     
     private fun processCurrentFrameForPose() {
+        // Get current position on main thread (ExoPlayer requirement)
+        val currentPosition = getCurrentPosition().toLong()
+        Log.d(TAG, "Processing frame at position: ${currentPosition}ms")
+        
+        // Switch to background thread for frame extraction
         coroutineScope.launch {
             try {
                 // Extract current frame using MediaMetadataRetriever for pose detection
                 val retriever = MediaMetadataRetriever()
                 retriever.setDataSource(context, videoUri)
                 
-                val currentPosition = getCurrentPosition().toLong()
                 val bitmap = retriever.getFrameAtTime(currentPosition * 1000, MediaMetadataRetriever.OPTION_CLOSEST)
                 
                 retriever.release()
                 
                 if (bitmap != null) {
+                    Log.d(TAG, "Frame extracted successfully: ${bitmap.width}x${bitmap.height}")
                     val inputImage = InputImage.fromBitmap(bitmap, 0)
                     
                     poseDetector.process(inputImage)
                         .addOnSuccessListener { pose ->
+                            Log.d(TAG, "Pose detection successful - landmarks: ${pose.allPoseLandmarks.size}")
                             mainHandler.post {
                                 if (isPoseDetectionEnabled) {
                                     updatePoseOverlay(pose, bitmap.width, bitmap.height)
@@ -481,6 +529,8 @@ class VideoPlayerView @JvmOverloads constructor(
                         .addOnFailureListener { e ->
                             Log.e(TAG, "Pose detection failed", e)
                         }
+                } else {
+                    Log.w(TAG, "Failed to extract frame from video")
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing frame for pose detection", e)
@@ -489,14 +539,34 @@ class VideoPlayerView @JvmOverloads constructor(
     }
     
     private fun updatePoseOverlay(pose: Pose, imageWidth: Int, imageHeight: Int) {
+        Log.d(TAG, "Updating pose overlay - extracted frame: ${imageWidth}x${imageHeight}, overlay: ${graphicOverlay.width}x${graphicOverlay.height}")
+        
+        // Get the actual video size from ExoPlayer
+        val videoFormat = exoPlayer?.videoFormat
+        val exoPlayerWidth = videoFormat?.width ?: 0
+        val exoPlayerHeight = videoFormat?.height ?: 0
+        Log.d(TAG, "ExoPlayer video format: ${exoPlayerWidth}x${exoPlayerHeight}")
+        
+        // Use the frame extraction dimensions (these are the actual image coordinates for pose landmarks)
+        // The pose landmarks are relative to the extracted frame, not the ExoPlayer format
+        val sourceWidth = imageWidth
+        val sourceHeight = imageHeight
+        
+        Log.d(TAG, "Using source dimensions for pose mapping: ${sourceWidth}x${sourceHeight}")
+        Log.d(TAG, "PlayerView dimensions: ${playerView.width}x${playerView.height}")
+        
         graphicOverlay.clear()
-        graphicOverlay.setImageSourceInfo(imageWidth, imageHeight)
+        graphicOverlay.setImageSourceInfo(sourceWidth, sourceHeight)
         graphicOverlay.setShowPreviewBorder(false)
         
         val landmarks = pose.allPoseLandmarks
+        Log.d(TAG, "Pose landmarks found: ${landmarks.size}")
         if (landmarks.isNotEmpty()) {
             val poseGraphic = PoseGraphic(graphicOverlay, pose)
             graphicOverlay.add(poseGraphic)
+            Log.d(TAG, "PoseGraphic added to overlay with source ${sourceWidth}x${sourceHeight}")
+        } else {
+            Log.d(TAG, "No pose landmarks detected")
         }
     }
     
