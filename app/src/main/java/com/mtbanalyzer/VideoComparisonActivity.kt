@@ -48,6 +48,9 @@ class VideoComparisonActivity : AppCompatActivity() {
         initializeViews()
         setupVideoData()
         setupControls()
+        
+        // Set initial layout orientation
+        updateLayoutOrientation(resources.configuration.orientation)
     }
     
     override fun onSupportNavigateUp(): Boolean {
@@ -296,9 +299,75 @@ class VideoComparisonActivity : AppCompatActivity() {
         }
     }
     
+    private fun updateLayoutOrientation(orientation: Int) {
+        val videoContainer = findViewById<LinearLayout>(R.id.videoContainer)
+        val divider = findViewById<View>(R.id.divider)
+        val video1Section = findViewById<LinearLayout>(R.id.video1Section)
+        val video2Section = findViewById<LinearLayout>(R.id.video2Section)
+        
+        when (orientation) {
+            Configuration.ORIENTATION_PORTRAIT -> {
+                // Stack videos vertically in portrait
+                videoContainer.orientation = LinearLayout.VERTICAL
+                
+                // Update video section layout params for vertical stacking
+                val video1Params = video1Section.layoutParams as LinearLayout.LayoutParams
+                video1Params.width = LinearLayout.LayoutParams.MATCH_PARENT
+                video1Params.height = 0
+                video1Params.weight = 1f
+                video1Section.layoutParams = video1Params
+                
+                val video2Params = video2Section.layoutParams as LinearLayout.LayoutParams
+                video2Params.width = LinearLayout.LayoutParams.MATCH_PARENT
+                video2Params.height = 0
+                video2Params.weight = 1f
+                video2Section.layoutParams = video2Params
+                
+                // Update divider for horizontal line
+                val dividerParams = divider.layoutParams as LinearLayout.LayoutParams
+                dividerParams.width = LinearLayout.LayoutParams.MATCH_PARENT
+                dividerParams.height = 2
+                dividerParams.weight = 0f
+                divider.layoutParams = dividerParams
+                
+                Log.d(TAG, "Layout updated to vertical (portrait)")
+            }
+            
+            Configuration.ORIENTATION_LANDSCAPE -> {
+                // Place videos side-by-side in landscape
+                videoContainer.orientation = LinearLayout.HORIZONTAL
+                
+                // Update video section layout params for horizontal placement
+                val video1Params = video1Section.layoutParams as LinearLayout.LayoutParams
+                video1Params.width = 0
+                video1Params.height = LinearLayout.LayoutParams.MATCH_PARENT
+                video1Params.weight = 1f
+                video1Section.layoutParams = video1Params
+                
+                val video2Params = video2Section.layoutParams as LinearLayout.LayoutParams
+                video2Params.width = 0
+                video2Params.height = LinearLayout.LayoutParams.MATCH_PARENT
+                video2Params.weight = 1f
+                video2Section.layoutParams = video2Params
+                
+                // Update divider for vertical line
+                val dividerParams = divider.layoutParams as LinearLayout.LayoutParams
+                dividerParams.width = 2
+                dividerParams.height = LinearLayout.LayoutParams.MATCH_PARENT
+                dividerParams.weight = 0f
+                divider.layoutParams = dividerParams
+                
+                Log.d(TAG, "Layout updated to horizontal (landscape)")
+            }
+        }
+    }
+    
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         Log.d(TAG, "Orientation changed: ${newConfig.orientation}")
+        
+        // Update layout orientation based on device orientation
+        updateLayoutOrientation(newConfig.orientation)
         
         // Trigger video re-layout for both players
         videoPlayer1.handleOrientationChange(newConfig)

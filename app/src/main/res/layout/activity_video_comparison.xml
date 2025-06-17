@@ -19,6 +19,7 @@
 
         <!-- Video 1 Section -->
         <LinearLayout
+            android:id="@+id/video1Section"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
@@ -47,12 +48,14 @@
 
         <!-- Divider -->
         <View
+            android:id="@+id/divider"
             android:layout_width="2dp"
             android:layout_height="match_parent"
             android:background="#FFFFFF" />
 
         <!-- Video 2 Section -->
         <LinearLayout
+            android:id="@+id/video2Section"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
