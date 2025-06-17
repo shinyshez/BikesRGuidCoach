@@ -148,7 +148,7 @@ class VideoPlayerView @JvmOverloads constructor(
                     }
                     Player.STATE_ENDED -> {
                         isPlaying = false
-                        playPauseButton.setImageResource(android.R.drawable.ic_media_play)
+                        playPauseButton.setImageResource(android.R.drawable.ic_popup_sync) // Reload icon
                         stopPoseProcessing()
                         onVideoCompletionListener?.invoke()
                     }
@@ -163,10 +163,20 @@ class VideoPlayerView @JvmOverloads constructor(
             
             override fun onIsPlayingChanged(playing: Boolean) {
                 isPlaying = playing
-                playPauseButton.setImageResource(
-                    if (playing) android.R.drawable.ic_media_pause
-                    else android.R.drawable.ic_media_play
-                )
+                
+                if (playing) {
+                    playPauseButton.setImageResource(android.R.drawable.ic_media_pause)
+                } else {
+                    // Check if we're at the end when pausing/stopping
+                    val currentPos = getCurrentPosition()
+                    val duration = getDuration()
+                    val isAtEnd = duration > 0 && currentPos >= duration - 500
+                    Log.d(TAG, "onIsPlayingChanged: playing=$playing, pos=$currentPos, duration=$duration, isAtEnd=$isAtEnd")
+                    playPauseButton.setImageResource(
+                        if (isAtEnd) android.R.drawable.ic_popup_sync
+                        else android.R.drawable.ic_media_play
+                    )
+                }
                 
                 if (playing && isPoseDetectionEnabled) {
                     startPoseProcessing()
@@ -249,6 +259,7 @@ class VideoPlayerView @JvmOverloads constructor(
             if (isPlaying) {
                 pause()
             } else {
+                // Use play() method which includes restart logic
                 play()
             }
         }
@@ -444,6 +455,7 @@ class VideoPlayerView @JvmOverloads constructor(
                                 if (onPlayPauseListener != null) {
                                     onPlayPauseListener!!(true) // true = play
                                 } else {
+                                    // Use built-in play with restart logic
                                     play()
                                 }
                             }
@@ -517,7 +529,20 @@ class VideoPlayerView @JvmOverloads constructor(
     }
     
     fun play() {
-        exoPlayer?.play()
+        // Check if we're at the end and should restart
+        val currentPos = getCurrentPosition()
+        val duration = getDuration()
+        val isAtEnd = duration > 0 && currentPos >= duration - 500
+        
+        if (isAtEnd) {
+            // Restart from beginning
+            seekTo(0)
+            mainHandler.postDelayed({
+                exoPlayer?.play()
+            }, 100)
+        } else {
+            exoPlayer?.play()
+        }
         // isPlaying will be updated by onIsPlayingChanged listener
     }
     
@@ -755,10 +780,29 @@ class VideoPlayerView @JvmOverloads constructor(
             
             timeDisplay.text = String.format("%d:%02d / %d:%02d (Frame %d/%d)", 
                 currentMin, currentSecRem, totalMin, totalSecRem, displayFrameIndex, totalFrames)
+                
+            // Update play button icon based on position
+            updatePlayButtonIcon(position)
         } catch (e: Exception) {
             Log.e(TAG, "Error updating time display", e)
             timeDisplay.text = "0:00 / 0:00 (Frame 0/0)"
         }
+    }
+    
+    private fun updatePlayButtonIcon(position: Int) {
+        if (!isPlaying) {
+            val duration = getDuration()
+            if (duration > 0) {
+                val isAtEnd = position >= duration - 500 // Within 500ms of end
+                Log.d(TAG, "updatePlayButtonIcon: position=$position, duration=$duration, isAtEnd=$isAtEnd, isPlaying=$isPlaying")
+                if (isAtEnd) {
+                    playPauseButton.setImageResource(android.R.drawable.ic_popup_sync) // Reload icon
+                } else {
+                    playPauseButton.setImageResource(android.R.drawable.ic_media_play) // Play icon
+                }
+            }
+        }
+        // If playing, the icon is already set to pause by onIsPlayingChanged
     }
     
     private fun startSeekBarUpdater() {

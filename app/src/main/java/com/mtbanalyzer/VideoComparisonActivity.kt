@@ -122,7 +122,14 @@ class VideoComparisonActivity : AppCompatActivity() {
                 if (videoPlayer1.isPlaying()) {
                     videoPlayer1.pause()
                 } else {
-                    videoPlayer1.play()
+                    // Check if at end for individual restart
+                    val isAtEnd = videoPlayer1.getCurrentPosition() >= videoPlayer1.getDuration() - 500
+                    if (isAtEnd) {
+                        videoPlayer1.seekTo(0)
+                        mainHandler.postDelayed({ videoPlayer1.play() }, 100)
+                    } else {
+                        videoPlayer1.play()
+                    }
                 }
             }
         }
@@ -141,7 +148,14 @@ class VideoComparisonActivity : AppCompatActivity() {
                 if (videoPlayer2.isPlaying()) {
                     videoPlayer2.pause()
                 } else {
-                    videoPlayer2.play()
+                    // Check if at end for individual restart
+                    val isAtEnd = videoPlayer2.getCurrentPosition() >= videoPlayer2.getDuration() - 500
+                    if (isAtEnd) {
+                        videoPlayer2.seekTo(0)
+                        mainHandler.postDelayed({ videoPlayer2.play() }, 100)
+                    } else {
+                        videoPlayer2.play()
+                    }
                 }
             }
         }
@@ -198,7 +212,14 @@ class VideoComparisonActivity : AppCompatActivity() {
                 }
             } else {
                 if (play) {
-                    videoPlayer1.play()
+                    // Check if at end for individual restart
+                    val isAtEnd = videoPlayer1.getCurrentPosition() >= videoPlayer1.getDuration() - 500
+                    if (isAtEnd) {
+                        videoPlayer1.seekTo(0)
+                        mainHandler.postDelayed({ videoPlayer1.play() }, 100)
+                    } else {
+                        videoPlayer1.play()
+                    }
                 } else {
                     videoPlayer1.pause()
                 }
@@ -214,7 +235,14 @@ class VideoComparisonActivity : AppCompatActivity() {
                 }
             } else {
                 if (play) {
-                    videoPlayer2.play()
+                    // Check if at end for individual restart
+                    val isAtEnd = videoPlayer2.getCurrentPosition() >= videoPlayer2.getDuration() - 500
+                    if (isAtEnd) {
+                        videoPlayer2.seekTo(0)
+                        mainHandler.postDelayed({ videoPlayer2.play() }, 100)
+                    } else {
+                        videoPlayer2.play()
+                    }
                 } else {
                     videoPlayer2.pause()
                 }
