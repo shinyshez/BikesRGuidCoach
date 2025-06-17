@@ -16,6 +16,7 @@ import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.google.mlkit.vision.common.InputImage
@@ -38,6 +39,7 @@ class VideoPlayerView @JvmOverloads constructor(
     // UI Components
     private lateinit var playerView: PlayerView
     private lateinit var graphicOverlay: GraphicOverlay
+    private lateinit var scrubOverlay: ScrubOverlay
     private lateinit var playPauseButton: ImageButton
     private lateinit var frameForwardButton: ImageButton
     private lateinit var frameBackwardButton: ImageButton
@@ -78,6 +80,13 @@ class VideoPlayerView @JvmOverloads constructor(
     private val mainHandler = Handler(Looper.getMainLooper())
     private var seekBarUpdateRunnable: Runnable? = null
     
+    // Scrubbing gesture state
+    private var isScrubbing = false
+    private var scrubStartX = 0f
+    private var scrubStartPosition = 0
+    private val scrubSensitivity = 2.0f // Pixels per millisecond
+    private val holdDuration = 500L // Time to hold before scrubbing starts
+    
     init {
         LayoutInflater.from(context).inflate(R.layout.view_video_player, this, true)
         initializeViews()
@@ -89,6 +98,7 @@ class VideoPlayerView @JvmOverloads constructor(
     private fun initializeViews() {
         playerView = findViewById(R.id.playerView)
         graphicOverlay = findViewById(R.id.graphic_overlay)
+        scrubOverlay = findViewById(R.id.scrub_overlay)
         playPauseButton = findViewById(R.id.playPauseButton)
         frameForwardButton = findViewById(R.id.frameForwardButton)
         frameBackwardButton = findViewById(R.id.frameBackwardButton)
@@ -248,6 +258,8 @@ class VideoPlayerView @JvmOverloads constructor(
         
         setupSeekBar()
         
+        setupScrubGesture()
+        
         startSeekBarUpdater()
     }
     
@@ -350,6 +362,142 @@ class VideoPlayerView @JvmOverloads constructor(
                 // Video stays paused after seeking for frame analysis
             }
         })
+    }
+    
+    private fun setupScrubGesture() {
+        // Set up touch listener on the PlayerView for scrub gesture
+        var holdStartTime = 0L
+        var holdCheckRunnable: Runnable? = null
+        
+        playerView.setOnTouchListener { _, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    // Start tracking hold duration
+                    holdStartTime = System.currentTimeMillis()
+                    scrubStartX = event.x
+                    scrubStartPosition = getCurrentPosition()
+                    
+                    // Cancel any existing hold check
+                    holdCheckRunnable?.let { mainHandler.removeCallbacks(it) }
+                    
+                    // Schedule check for hold duration
+                    holdCheckRunnable = Runnable {
+                        if (!isScrubbing && !isPlaying) {
+                            // Enter scrub mode
+                            startScrubbing()
+                        }
+                    }
+                    mainHandler.postDelayed(holdCheckRunnable!!, holdDuration)
+                    
+                    true // Consume the event
+                }
+                
+                MotionEvent.ACTION_MOVE -> {
+                    if (isScrubbing) {
+                        // Calculate seek position based on drag distance
+                        val deltaX = event.x - scrubStartX
+                        val deltaMs = (deltaX * scrubSensitivity).toInt()
+                        val newPosition = (scrubStartPosition + deltaMs).coerceIn(0, videoDuration.toInt())
+                        
+                        // Update scrub overlay
+                        val progress = newPosition.toFloat() / videoDuration.toFloat()
+                        scrubOverlay.updateScrubPosition(progress)
+                        updateScrubTimeDisplay(newPosition)
+                        
+                        // Perform the seek
+                        seekTo(newPosition)
+                        
+                        true
+                    } else {
+                        false
+                    }
+                }
+                
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    // Cancel hold check if not yet in scrub mode
+                    holdCheckRunnable?.let { mainHandler.removeCallbacks(it) }
+                    holdCheckRunnable = null
+                    
+                    if (isScrubbing) {
+                        // Exit scrub mode
+                        stopScrubbing()
+                        true
+                    } else {
+                        // If it was a quick tap and not playing, toggle play/pause
+                        val holdDuration = System.currentTimeMillis() - holdStartTime
+                        if (holdDuration < 200) { // Quick tap threshold
+                            if (isPlaying) {
+                                pause()
+                            } else {
+                                play()
+                            }
+                        }
+                        false
+                    }
+                }
+                
+                else -> false
+            }
+        }
+    }
+    
+    private fun startScrubbing() {
+        isScrubbing = true
+        
+        // Pause video if playing
+        if (isPlaying) {
+            pause()
+        }
+        
+        // Show scrub overlay
+        scrubOverlay.setActive(true)
+        
+        // Update initial position
+        val progress = getCurrentPosition().toFloat() / videoDuration.toFloat()
+        scrubOverlay.updateScrubPosition(progress)
+        updateScrubTimeDisplay(getCurrentPosition())
+        
+        // Dim bottom controls for cleaner UI during scrubbing
+        findViewById<View>(R.id.bottomControlsBar).animate()
+            .alpha(0.3f)
+            .setDuration(200)
+            .start()
+        
+        Log.d(TAG, "Started scrubbing mode")
+    }
+    
+    private fun stopScrubbing() {
+        isScrubbing = false
+        
+        // Hide scrub overlay
+        scrubOverlay.setActive(false)
+        
+        // Restore bottom controls to full brightness
+        findViewById<View>(R.id.bottomControlsBar).animate()
+            .alpha(1.0f)
+            .setDuration(200)
+            .start()
+        
+        // Process pose if enabled
+        if (isPoseDetectionEnabled) {
+            processCurrentFrameForPose()
+        }
+        
+        Log.d(TAG, "Stopped scrubbing mode")
+    }
+    
+    private fun updateScrubTimeDisplay(positionMs: Int) {
+        val currentSec = positionMs / 1000
+        val totalSec = videoDuration.toInt() / 1000
+        val currentMin = currentSec / 60
+        val currentSecRem = currentSec % 60
+        val totalMin = totalSec / 60
+        val totalSecRem = totalSec % 60
+        
+        val currentTime = String.format("%d:%02d", currentMin, currentSecRem)
+        val totalTime = String.format("%d:%02d", totalMin, totalSecRem)
+        
+        scrubOverlay.updateTimeDisplay(currentTime, totalTime)
     }
     
     fun play() {
@@ -545,14 +693,8 @@ class VideoPlayerView @JvmOverloads constructor(
     private fun updatePoseOverlay(pose: Pose, imageWidth: Int, imageHeight: Int) {
         Log.d(TAG, "Updating pose overlay - extracted frame: ${imageWidth}x${imageHeight}, overlay: ${graphicOverlay.width}x${graphicOverlay.height}")
         
-        // Get the actual video size from ExoPlayer
-        val videoFormat = exoPlayer?.videoFormat
-        val exoPlayerWidth = videoFormat?.width ?: 0
-        val exoPlayerHeight = videoFormat?.height ?: 0
-        Log.d(TAG, "ExoPlayer video format: ${exoPlayerWidth}x${exoPlayerHeight}")
-        
         // Use the frame extraction dimensions (these are the actual image coordinates for pose landmarks)
-        // The pose landmarks are relative to the extracted frame, not the ExoPlayer format
+        // The pose landmarks are relative to the extracted frame, so we'll use those dimensions directly
         val sourceWidth = imageWidth
         val sourceHeight = imageHeight
         
