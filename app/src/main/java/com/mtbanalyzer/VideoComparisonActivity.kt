@@ -22,16 +22,10 @@ class VideoComparisonActivity : AppCompatActivity() {
     
     private lateinit var videoPlayer1: VideoPlayerView
     private lateinit var videoPlayer2: VideoPlayerView
-    private lateinit var video1Title: TextView
-    private lateinit var video2Title: TextView
-    private lateinit var playBothButton: Button
-    private lateinit var pauseBothButton: Button
     private lateinit var lockButton: Button
-    private lateinit var layoutToggleButton: ImageButton
     
     private var video1Uri: Uri? = null
     private var video2Uri: Uri? = null
-    private var isSideBySide = true
     private var isLocked = false
     private var positionOffset = 0 // Video2 position - Video1 position
     
@@ -61,22 +55,14 @@ class VideoComparisonActivity : AppCompatActivity() {
     private fun initializeViews() {
         videoPlayer1 = findViewById(R.id.videoPlayer1)
         videoPlayer2 = findViewById(R.id.videoPlayer2)
-        video1Title = findViewById(R.id.video1Title)
-        video2Title = findViewById(R.id.video2Title)
         
         // Global controls
-        playBothButton = findViewById(R.id.playBothButton)
-        pauseBothButton = findViewById(R.id.pauseBothButton)
         lockButton = findViewById(R.id.lockButton)
-        layoutToggleButton = findViewById(R.id.layoutToggleButton)
     }
     
     private fun setupVideoData() {
         video1Uri = intent.getStringExtra(EXTRA_VIDEO1_URI)?.let { Uri.parse(it) }
         video2Uri = intent.getStringExtra(EXTRA_VIDEO2_URI)?.let { Uri.parse(it) }
-        
-        video1Title.text = intent.getStringExtra(EXTRA_VIDEO1_NAME) ?: "Video 1"
-        video2Title.text = intent.getStringExtra(EXTRA_VIDEO2_NAME) ?: "Video 2"
         
         if (video1Uri == null || video2Uri == null) {
             Toast.makeText(this, "Error loading videos", Toast.LENGTH_LONG).show()
@@ -130,7 +116,7 @@ class VideoComparisonActivity : AppCompatActivity() {
                 if (videoPlayer1.isPlaying() || videoPlayer2.isPlaying()) {
                     pauseVideos()
                 } else {
-                    playVideos()
+                    playVideosFromStart()
                 }
             } else {
                 if (videoPlayer1.isPlaying()) {
@@ -149,7 +135,7 @@ class VideoComparisonActivity : AppCompatActivity() {
                 if (videoPlayer1.isPlaying() || videoPlayer2.isPlaying()) {
                     pauseVideos()
                 } else {
-                    playVideos()
+                    playVideosFromStart()
                 }
             } else {
                 if (videoPlayer2.isPlaying()) {
@@ -201,6 +187,39 @@ class VideoComparisonActivity : AppCompatActivity() {
                 }
             }
         }
+        
+        // Override tap-to-play for both videos
+        videoPlayer1.setOnPlayPauseListener { play ->
+            if (isLocked) {
+                if (play) {
+                    playVideosFromStart()
+                } else {
+                    pauseVideos()
+                }
+            } else {
+                if (play) {
+                    videoPlayer1.play()
+                } else {
+                    videoPlayer1.pause()
+                }
+            }
+        }
+        
+        videoPlayer2.setOnPlayPauseListener { play ->
+            if (isLocked) {
+                if (play) {
+                    playVideosFromStart()
+                } else {
+                    pauseVideos()
+                }
+            } else {
+                if (play) {
+                    videoPlayer2.play()
+                } else {
+                    videoPlayer2.pause()
+                }
+            }
+        }
     }
     
     private fun setupSeekSynchronization() {
@@ -232,20 +251,8 @@ class VideoComparisonActivity : AppCompatActivity() {
     
     private fun setupControls() {
         // Global controls
-        playBothButton.setOnClickListener {
-            playVideos()
-        }
-        
-        pauseBothButton.setOnClickListener {
-            pauseVideos()
-        }
-        
         lockButton.setOnClickListener {
             toggleLock()
-        }
-        
-        layoutToggleButton.setOnClickListener {
-            toggleLayout()
         }
     }
     
@@ -255,6 +262,46 @@ class VideoComparisonActivity : AppCompatActivity() {
         
         if (isLocked) {
             startSyncRunnable()
+        }
+    }
+    
+    private fun playVideosFromStart() {
+        // Check if either video is at the end (or very close to it)
+        val video1Duration = videoPlayer1.getDuration()
+        val video2Duration = videoPlayer2.getDuration()
+        val video1Position = videoPlayer1.getCurrentPosition()
+        val video2Position = videoPlayer2.getCurrentPosition()
+        
+        val video1AtEnd = video1Position >= video1Duration - 500 // Within 500ms of end
+        val video2AtEnd = video2Position >= video2Duration - 500
+        
+        Log.d(TAG, "playVideosFromStart: video1 pos=$video1Position/$video1Duration atEnd=$video1AtEnd, video2 pos=$video2Position/$video2Duration atEnd=$video2AtEnd")
+        
+        if (video1AtEnd || video2AtEnd) {
+            // Reset to start positions accounting for offset
+            if (positionOffset >= 0) {
+                // Video2 is ahead, so video1 starts at 0 and video2 starts at offset
+                videoPlayer1.seekTo(0)
+                videoPlayer2.seekTo(positionOffset)
+                Log.d(TAG, "Restarting from beginning: video1=0, video2=$positionOffset")
+            } else {
+                // Video1 is ahead, so video2 starts at 0 and video1 starts at -offset
+                videoPlayer1.seekTo(-positionOffset)
+                videoPlayer2.seekTo(0)
+                Log.d(TAG, "Restarting from beginning: video1=${-positionOffset}, video2=0")
+            }
+            
+            // Small delay to ensure seek completes before playing
+            mainHandler.postDelayed({
+                videoPlayer1.play()
+                videoPlayer2.play()
+                if (isLocked) {
+                    startSyncRunnable()
+                }
+            }, 100)
+        } else {
+            // Not at end, just play normally
+            playVideos()
         }
     }
     
@@ -370,20 +417,6 @@ class VideoComparisonActivity : AppCompatActivity() {
         Log.d(TAG, "Stepped single video: forward=$forward, newPosition=$newPosition")
     }
     
-    
-    private fun toggleLayout() {
-        val container = findViewById<View>(R.id.videoContainer)
-        if (isSideBySide) {
-            // Switch to top/bottom layout
-            Toast.makeText(this, "Layout toggle - implement constraint changes", Toast.LENGTH_SHORT).show()
-            layoutToggleButton.setImageResource(android.R.drawable.ic_menu_sort_by_size)
-            isSideBySide = false
-        } else {
-            // Switch back to side-by-side
-            layoutToggleButton.setImageResource(android.R.drawable.ic_menu_view)
-            isSideBySide = true
-        }
-    }
     
     private fun updateLayoutOrientation(orientation: Int) {
         val videoContainer = findViewById<LinearLayout>(R.id.videoContainer)

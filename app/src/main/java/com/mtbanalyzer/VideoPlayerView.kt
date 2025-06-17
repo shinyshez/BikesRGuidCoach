@@ -78,6 +78,7 @@ class VideoPlayerView @JvmOverloads constructor(
     private var onSeekListener: ((position: Int, fromUser: Boolean) -> Unit)? = null
     private var onFrameStepListener: ((forward: Boolean) -> Unit)? = null
     private var onScrubListener: ((position: Int) -> Unit)? = null
+    private var onPlayPauseListener: ((play: Boolean) -> Unit)? = null
     
     private val mainHandler = Handler(Looper.getMainLooper())
     private var seekBarUpdateRunnable: Runnable? = null
@@ -432,12 +433,22 @@ class VideoPlayerView @JvmOverloads constructor(
                         val holdDuration = System.currentTimeMillis() - holdStartTime
                         if (holdDuration < 200) { // Quick tap threshold
                             if (isPlaying) {
-                                pause()
+                                // Check for override listener
+                                if (onPlayPauseListener != null) {
+                                    onPlayPauseListener!!(false) // false = pause
+                                } else {
+                                    pause()
+                                }
                             } else {
-                                play()
+                                // Check for override listener
+                                if (onPlayPauseListener != null) {
+                                    onPlayPauseListener!!(true) // true = play
+                                } else {
+                                    play()
+                                }
                             }
                         }
-                        false
+                        true // Consume the event to prevent it from being handled elsewhere
                     }
                 }
                 
@@ -787,6 +798,10 @@ class VideoPlayerView @JvmOverloads constructor(
     
     fun setOnScrubListener(listener: (position: Int) -> Unit) {
         onScrubListener = listener
+    }
+    
+    fun setOnPlayPauseListener(listener: (play: Boolean) -> Unit) {
+        onPlayPauseListener = listener
     }
     
     fun handleOrientationChange(newConfig: Configuration) {

@@ -119,10 +119,7 @@ class ScrubOverlay @JvmOverloads constructor(
         // Draw scrub indicator
         canvas.drawCircle(progressX, barY, scrubIndicatorRadius, scrubIndicatorPaint)
         
-        // Draw instruction text at top
-        val instructionText = "Hold & Drag to Seek"
-        
-        canvas.drawText(instructionText, width / 2f, height * 0.25f, textPaint)
+        // No instruction text - removed for cleaner UI
         
         // Draw time display
         val timeY = barY + scrubIndicatorRadius + 60f * context.resources.displayMetrics.density

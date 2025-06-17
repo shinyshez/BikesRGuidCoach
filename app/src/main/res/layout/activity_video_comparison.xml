@@ -26,23 +26,10 @@
             android:orientation="vertical"
             android:padding="4dp">
 
-            <TextView
-                android:id="@+id/video1Title"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Video 1"
-                android:textColor="#FFFFFF"
-                android:textSize="14sp"
-                android:textStyle="bold"
-                android:gravity="center"
-                android:padding="8dp"
-                android:background="#33FFFFFF" />
-
             <com.mtbanalyzer.VideoPlayerView
                 android:id="@+id/videoPlayer1"
                 android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_weight="1" />
+                android:layout_height="match_parent" />
 
         </LinearLayout>
 
@@ -62,23 +49,10 @@
             android:orientation="vertical"
             android:padding="4dp">
 
-            <TextView
-                android:id="@+id/video2Title"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Video 2"
-                android:textColor="#FFFFFF"
-                android:textSize="14sp"
-                android:textStyle="bold"
-                android:gravity="center"
-                android:padding="8dp"
-                android:background="#33FFFFFF" />
-
             <com.mtbanalyzer.VideoPlayerView
                 android:id="@+id/videoPlayer2"
                 android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_weight="1" />
+                android:layout_height="match_parent" />
 
         </LinearLayout>
 
@@ -96,59 +70,15 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Global Controls"
-            android:textColor="#CCFFFFFF"
-            android:textSize="12sp"
-            android:gravity="center"
-            android:layout_marginBottom="8dp" />
-
         <!-- Control Buttons -->
-        <LinearLayout
-            android:layout_width="match_parent"
+        <Button
+            android:id="@+id/lockButton"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center">
-
-            <Button
-                android:id="@+id/playBothButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Play Both"
-                android:layout_marginEnd="12dp"
-                android:backgroundTint="#44AA44"
-                android:textColor="#FFFFFF" />
-
-            <Button
-                android:id="@+id/pauseBothButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Pause Both"
-                android:layout_marginEnd="12dp"
-                android:backgroundTint="#AA4444"
-                android:textColor="#FFFFFF" />
-
-            <Button
-                android:id="@+id/lockButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Lock"
-                android:layout_marginEnd="12dp"
-                android:backgroundTint="#4444FF"
-                android:textColor="#FFFFFF" />
-
-            <ImageButton
-                android:id="@+id/layoutToggleButton"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:src="@android:drawable/ic_menu_view"
-                android:background="?android:attr/selectableItemBackgroundBorderless"
-                app:tint="#FFFFFF"
-                android:contentDescription="Toggle Layout" />
-
-        </LinearLayout>
+            android:text="Lock"
+            android:layout_gravity="center"
+            android:backgroundTint="#4444FF"
+            android:textColor="#FFFFFF" />
 
     </LinearLayout>
 
