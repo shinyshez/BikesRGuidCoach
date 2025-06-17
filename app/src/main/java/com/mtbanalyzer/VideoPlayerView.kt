@@ -76,6 +76,8 @@ class VideoPlayerView @JvmOverloads constructor(
     private var onVideoErrorListener: ((what: Int, extra: Int) -> Unit)? = null
     private var onVideoCompletionListener: (() -> Unit)? = null
     private var onSeekListener: ((position: Int, fromUser: Boolean) -> Unit)? = null
+    private var onFrameStepListener: ((forward: Boolean) -> Unit)? = null
+    private var onScrubListener: ((position: Int) -> Unit)? = null
     
     private val mainHandler = Handler(Looper.getMainLooper())
     private var seekBarUpdateRunnable: Runnable? = null
@@ -407,6 +409,9 @@ class VideoPlayerView @JvmOverloads constructor(
                         // Perform the seek
                         seekTo(newPosition)
                         
+                        // Notify scrub listener if set (for video comparison sync)
+                        onScrubListener?.invoke(newPosition)
+                        
                         true
                     } else {
                         false
@@ -525,6 +530,12 @@ class VideoPlayerView @JvmOverloads constructor(
     
     private fun stepFrame(forward: Boolean) {
         Log.d(TAG, "stepFrame called: forward=$forward, frameRate=$frameRate, frameDurationMs=$frameDurationMs")
+        
+        // Check if there's a frame step override (for video comparison lock mode)
+        if (onFrameStepListener != null) {
+            onFrameStepListener!!(forward)
+            return
+        }
         
         if (isPlaying) {
             pause()
@@ -768,6 +779,14 @@ class VideoPlayerView @JvmOverloads constructor(
     
     fun setOnSeekListener(listener: (position: Int, fromUser: Boolean) -> Unit) {
         onSeekListener = listener
+    }
+    
+    fun setOnFrameStepListener(listener: (forward: Boolean) -> Unit) {
+        onFrameStepListener = listener
+    }
+    
+    fun setOnScrubListener(listener: (position: Int) -> Unit) {
+        onScrubListener = listener
     }
     
     fun handleOrientationChange(newConfig: Configuration) {

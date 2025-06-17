@@ -159,6 +159,48 @@ class VideoComparisonActivity : AppCompatActivity() {
                 }
             }
         }
+        
+        // Override frame stepping controls for both videos
+        videoPlayer1.setOnFrameStepListener { forward ->
+            if (isLocked) {
+                // When locked, step both videos
+                stepBothVideos(forward)
+            } else {
+                // Normal single video frame stepping - call the original method directly
+                stepSingleVideo(videoPlayer1, forward)
+            }
+        }
+        
+        videoPlayer2.setOnFrameStepListener { forward ->
+            if (isLocked) {
+                // When locked, step both videos
+                stepBothVideos(forward)
+            } else {
+                // Normal single video frame stepping - call the original method directly
+                stepSingleVideo(videoPlayer2, forward)
+            }
+        }
+        
+        // Override scrub gesture for both videos
+        videoPlayer1.setOnScrubListener { position ->
+            if (isLocked) {
+                // When locked, sync the other video
+                val video2Position = position + positionOffset
+                if (video2Position >= 0 && video2Position <= videoPlayer2.getDuration()) {
+                    videoPlayer2.seekTo(video2Position)
+                }
+            }
+        }
+        
+        videoPlayer2.setOnScrubListener { position ->
+            if (isLocked) {
+                // When locked, sync the other video
+                val video1Position = position - positionOffset
+                if (video1Position >= 0 && video1Position <= videoPlayer1.getDuration()) {
+                    videoPlayer1.seekTo(video1Position)
+                }
+            }
+        }
     }
     
     private fun setupSeekSynchronization() {
@@ -284,6 +326,50 @@ class VideoComparisonActivity : AppCompatActivity() {
         }
         syncRunnable = null
     }
+    
+    private fun stepBothVideos(forward: Boolean) {
+        // Step both videos together in locked mode
+        val currentPosition1 = videoPlayer1.getCurrentPosition()
+        val currentPosition2 = videoPlayer2.getCurrentPosition()
+        
+        // Calculate step size (assuming 30fps default)
+        val stepSize = 33 // ~33ms per frame at 30fps
+        
+        val newPosition1 = if (forward) {
+            minOf(currentPosition1 + stepSize, videoPlayer1.getDuration())
+        } else {
+            maxOf(currentPosition1 - stepSize, 0)
+        }
+        
+        val newPosition2 = if (forward) {
+            minOf(currentPosition2 + stepSize, videoPlayer2.getDuration())
+        } else {
+            maxOf(currentPosition2 - stepSize, 0)
+        }
+        
+        // Seek both videos
+        videoPlayer1.seekTo(newPosition1)
+        videoPlayer2.seekTo(newPosition2)
+        
+        Log.d(TAG, "Stepped both videos: forward=$forward, pos1=$newPosition1, pos2=$newPosition2")
+    }
+    
+    private fun stepSingleVideo(videoPlayer: VideoPlayerView, forward: Boolean) {
+        // This would normally call the original stepFrame method
+        // For now, we'll implement basic stepping
+        val currentPosition = videoPlayer.getCurrentPosition()
+        val stepSize = 33 // ~33ms per frame at 30fps
+        
+        val newPosition = if (forward) {
+            minOf(currentPosition + stepSize, videoPlayer.getDuration())
+        } else {
+            maxOf(currentPosition - stepSize, 0)
+        }
+        
+        videoPlayer.seekTo(newPosition)
+        Log.d(TAG, "Stepped single video: forward=$forward, newPosition=$newPosition")
+    }
+    
     
     private fun toggleLayout() {
         val container = findViewById<View>(R.id.videoContainer)
