@@ -109,6 +109,9 @@ class VideoComparisonActivity : AppCompatActivity() {
             // Override individual play/pause buttons to respect lock state
             setupIndividualControls()
             
+            // Setup seek synchronization for locked mode
+            setupSeekSynchronization()
+            
         } catch (e: Exception) {
             Log.e(TAG, "Error setting up videos", e)
             Toast.makeText(this, "Error setting up videos: ${e.message}", Toast.LENGTH_LONG).show()
@@ -153,49 +156,33 @@ class VideoComparisonActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+    
+    private fun setupSeekSynchronization() {
+        // Setup seek callbacks for synchronized seeking when locked
+        videoPlayer1.setOnSeekListener { position, fromUser ->
+            if (fromUser && isLocked) {
+                // Seek video2 with preserved offset
+                val video2Position = position + positionOffset
+                if (video2Position >= 0 && video2Position <= videoPlayer2.getDuration()) {
+                    videoPlayer2.seekTo(video2Position)
+                }
+                // Pause both videos during seeking for better sync
+                pauseVideos()
+            }
+        }
         
-        // Override seek bars to maintain offset when locked
-        val seekBar1 = videoPlayer1.findViewById<SeekBar>(R.id.seekBar)
-        seekBar1.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                if (fromUser && isLocked) {
-                    // Seek video2 with preserved offset
-                    val video2Position = progress + positionOffset
-                    if (video2Position >= 0 && video2Position <= videoPlayer2.getDuration()) {
-                        videoPlayer2.seekTo(video2Position)
-                    }
+        videoPlayer2.setOnSeekListener { position, fromUser ->
+            if (fromUser && isLocked) {
+                // Seek video1 with preserved offset  
+                val video1Position = position - positionOffset
+                if (video1Position >= 0 && video1Position <= videoPlayer1.getDuration()) {
+                    videoPlayer1.seekTo(video1Position)
                 }
+                // Pause both videos during seeking for better sync
+                pauseVideos()
             }
-            
-            override fun onStartTrackingTouch(seekBar: SeekBar?) {
-                if (isLocked) {
-                    pauseVideos()
-                }
-            }
-            
-            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
-        })
-        
-        val seekBar2 = videoPlayer2.findViewById<SeekBar>(R.id.seekBar)
-        seekBar2.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                if (fromUser && isLocked) {
-                    // Seek video1 with preserved offset
-                    val video1Position = progress - positionOffset
-                    if (video1Position >= 0 && video1Position <= videoPlayer1.getDuration()) {
-                        videoPlayer1.seekTo(video1Position)
-                    }
-                }
-            }
-            
-            override fun onStartTrackingTouch(seekBar: SeekBar?) {
-                if (isLocked) {
-                    pauseVideos()
-                }
-            }
-            
-            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
-        })
+        }
     }
     
     private fun setupControls() {
@@ -266,19 +253,23 @@ class VideoComparisonActivity : AppCompatActivity() {
         syncRunnable = object : Runnable {
             override fun run() {
                 if (isLocked && (videoPlayer1.isPlaying() || videoPlayer2.isPlaying())) {
-                    // Keep videos in sync
+                    // Keep videos in sync - but only check, don't aggressively seek
                     val position1 = videoPlayer1.getCurrentPosition()
                     val expectedPosition2 = position1 + positionOffset
                     val actualPosition2 = videoPlayer2.getCurrentPosition()
                     
-                    // If videos are out of sync by more than 50ms, resync
-                    if (kotlin.math.abs(expectedPosition2 - actualPosition2) > 50) {
+                    // Only resync if videos are significantly out of sync (200ms+)
+                    // This reduces stuttering from constant seeking
+                    val syncDrift = kotlin.math.abs(expectedPosition2 - actualPosition2)
+                    if (syncDrift > 200) {
+                        Log.d(TAG, "Videos out of sync by ${syncDrift}ms, resyncing")
                         if (expectedPosition2 >= 0 && expectedPosition2 <= videoPlayer2.getDuration()) {
                             videoPlayer2.seekTo(expectedPosition2)
                         }
                     }
                 }
-                mainHandler.postDelayed(this, 100)
+                // Check sync less frequently to reduce performance impact
+                mainHandler.postDelayed(this, 300)
             }
         }
         mainHandler.post(syncRunnable!!)

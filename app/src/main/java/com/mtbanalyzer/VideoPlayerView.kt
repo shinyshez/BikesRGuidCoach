@@ -73,6 +73,7 @@ class VideoPlayerView @JvmOverloads constructor(
     private var onVideoLoadedListener: ((duration: Int) -> Unit)? = null
     private var onVideoErrorListener: ((what: Int, extra: Int) -> Unit)? = null
     private var onVideoCompletionListener: (() -> Unit)? = null
+    private var onSeekListener: ((position: Int, fromUser: Boolean) -> Unit)? = null
     
     private val mainHandler = Handler(Looper.getMainLooper())
     private var seekBarUpdateRunnable: Runnable? = null
@@ -332,6 +333,9 @@ class VideoPlayerView @JvmOverloads constructor(
                     
                     // Perform frame-accurate seeking with ExoPlayer
                     exoPlayer?.seekTo(progress.toLong())
+                    
+                    // Notify callback for video comparison synchronization
+                    onSeekListener?.invoke(progress, fromUser)
                 }
             }
             
@@ -618,6 +622,10 @@ class VideoPlayerView @JvmOverloads constructor(
     
     fun setOnVideoCompletionListener(listener: () -> Unit) {
         onVideoCompletionListener = listener
+    }
+    
+    fun setOnSeekListener(listener: (position: Int, fromUser: Boolean) -> Unit) {
+        onSeekListener = listener
     }
     
     fun handleOrientationChange(newConfig: Configuration) {
