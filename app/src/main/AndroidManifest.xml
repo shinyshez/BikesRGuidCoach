@@ -42,7 +42,8 @@
             android:name=".SettingsActivity"
             android:exported="false"
             android:parentActivityName=".MainActivity"
-            android:screenOrientation="landscape" />
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:screenOrientation="sensor" />
             
         <activity
             android:name=".VideoGalleryActivity"

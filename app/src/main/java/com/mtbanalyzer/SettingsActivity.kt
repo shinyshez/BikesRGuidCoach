@@ -2,6 +2,7 @@ package com.mtbanalyzer
 
 import android.content.ContentResolver
 import android.content.ContentUris
+import android.content.res.Configuration
 import android.os.Bundle
 import android.provider.MediaStore
 import android.util.Log
@@ -37,6 +38,16 @@ class SettingsActivity : AppCompatActivity() {
     override fun onSupportNavigateUp(): Boolean {
         onBackPressed()
         return true
+    }
+    
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        
+        // The PreferenceFragmentCompat handles orientation changes automatically
+        // but we can add any custom handling here if needed
+        Log.d("SettingsActivity", "Configuration changed: orientation = ${
+            if (newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE) "landscape" else "portrait"
+        }")
     }
 
     class SettingsFragment : PreferenceFragmentCompat() {
