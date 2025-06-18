@@ -62,6 +62,15 @@ class VideoGalleryActivity : AppCompatActivity() {
         return true
     }
     
+    override fun onBackPressed() {
+        if (isCompareMode) {
+            // Exit compare mode instead of closing activity
+            exitCompareMode(findViewById(R.id.compareControls))
+        } else {
+            super.onBackPressed()
+        }
+    }
+    
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         
@@ -90,13 +99,23 @@ class VideoGalleryActivity : AppCompatActivity() {
         val compareControls = findViewById<android.view.View>(R.id.compareControls)
         val compareInstructions = findViewById<android.widget.TextView>(R.id.compareInstructions)
         
-        adapter = VideoAdapter(videos, isCompareMode, selectedVideos) { videoItem, isSelected ->
-            if (isCompareMode) {
-                handleVideoSelection(videoItem, isSelected, startCompareButton, compareInstructions)
-            } else {
-                playVideo(videoItem.uri)
+        adapter = VideoAdapter(videos, isCompareMode, selectedVideos,
+            onVideoClick = { videoItem, isSelected ->
+                if (isCompareMode) {
+                    handleVideoSelection(videoItem, isSelected, startCompareButton, compareInstructions)
+                } else {
+                    playVideo(videoItem.uri)
+                }
+            },
+            onVideoLongClick = { videoItem ->
+                if (!isCompareMode) {
+                    // Enter compare mode and select the long-pressed video
+                    enterCompareMode(compareControls)
+                    handleVideoSelection(videoItem, true, startCompareButton, compareInstructions)
+                    Toast.makeText(this, "Compare mode: Tap another video to compare", Toast.LENGTH_SHORT).show()
+                }
             }
-        }
+        )
         
         // Set column count based on orientation
         val columnCount = getColumnCount()
@@ -275,6 +294,9 @@ class VideoGalleryActivity : AppCompatActivity() {
                 putExtra(VideoComparisonActivity.EXTRA_VIDEO2_NAME, selectedVideos[1].displayName)
             }
             startActivity(intent)
+            
+            // Exit compare mode after starting comparison
+            exitCompareMode(findViewById(R.id.compareControls))
         }
     }
 
@@ -289,7 +311,8 @@ class VideoAdapter(
     private val videos: List<VideoItem>,
     private var isCompareMode: Boolean,
     private val selectedVideos: MutableList<VideoItem>,
-    private val onVideoClick: (VideoItem, Boolean) -> Unit
+    private val onVideoClick: (VideoItem, Boolean) -> Unit,
+    private val onVideoLongClick: (VideoItem) -> Unit
 ) : RecyclerView.Adapter<VideoAdapter.VideoViewHolder>() {
     
     class VideoViewHolder(view: View) : RecyclerView.ViewHolder(view) {
@@ -360,6 +383,11 @@ class VideoAdapter(
             
             holder.itemView.setOnClickListener {
                 onVideoClick(video, false) // isSelected not used in normal mode
+            }
+            
+            holder.itemView.setOnLongClickListener {
+                onVideoLongClick(video)
+                true // Consume the long click event
             }
         }
     }

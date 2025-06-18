@@ -29,10 +29,17 @@ Access recorded videos through the gallery icon:
 
 ### Video Comparison
 Compare two videos side-by-side:
-1. Long press first video in gallery
-2. Tap second video
-3. Use "Lock" button to synchronize playback
-4. When locked, controls affect both videos together
+1. Long press any video in gallery to enter compare mode
+2. First video is automatically selected
+3. Tap a second video to select it for comparison
+4. Tap "Start Comparison" when both videos are selected
+5. Use "Lock" button to synchronize playback
+6. When locked, controls affect both videos together
+
+Alternative method:
+- Tap the compare button (FAB) to manually enter compare mode
+- Select two videos by tapping them
+- Tap "Start Comparison"
 
 ### Settings
 
