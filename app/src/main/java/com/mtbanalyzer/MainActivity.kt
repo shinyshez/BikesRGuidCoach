@@ -11,6 +11,7 @@ import android.os.PowerManager
 import android.view.WindowManager
 import android.provider.MediaStore
 import android.util.Log
+import android.view.KeyEvent
 import android.view.View
 import android.widget.TextView
 import android.widget.Toast
@@ -439,6 +440,46 @@ class MainActivity : AppCompatActivity(),
             "hybrid" -> "Hybrid Detection"
             else -> "Unknown Detector"
         }
+    }
+
+    // Volume key interception for Bluetooth remote control
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        if (settingsManager.isBluetoothRemoteEnabled()) {
+            when (keyCode) {
+                KeyEvent.KEYCODE_VOLUME_UP -> {
+                    // Volume up: Start/stop manual recording
+                    Log.d(TAG, "Volume up pressed - Bluetooth remote control")
+                    if (recordingManager.isRecording()) {
+                        Log.d(TAG, "Stopping recording via Bluetooth remote")
+                        recordingManager.stopRecording()
+                        Toast.makeText(this, "Recording stopped (remote)", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Log.d(TAG, "Starting recording via Bluetooth remote")
+                        manualStartRecording()
+                        Toast.makeText(this, "Recording started (remote)", Toast.LENGTH_SHORT).show()
+                    }
+                    return true // Consume the event
+                }
+                
+                KeyEvent.KEYCODE_VOLUME_DOWN -> {
+                    // Volume down: Toggle rider detection
+                    Log.d(TAG, "Volume down pressed - Bluetooth remote control")
+                    val currentState = settingsManager.isRiderDetectionEnabled()
+                    val newState = !currentState
+                    settingsManager.setRiderDetectionEnabled(newState)
+                    detectionToggle.isChecked = newState
+                    updateDetectionState(newState)
+                    Toast.makeText(this, 
+                        if (newState) "Rider detection enabled (remote)" 
+                        else "Rider detection disabled (remote)", 
+                        Toast.LENGTH_SHORT).show()
+                    return true // Consume the event
+                }
+            }
+        }
+        
+        // If Bluetooth remote is disabled or key not handled, use default behavior
+        return super.onKeyDown(keyCode, event)
     }
 
     override fun onDestroy() {

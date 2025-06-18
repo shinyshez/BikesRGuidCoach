@@ -82,6 +82,23 @@
 
     </PreferenceCategory>
 
+    <PreferenceCategory android:title="Remote Control">
+
+        <SwitchPreferenceCompat
+            android:key="bluetooth_remote_enabled"
+            android:title="Enable Bluetooth Remote"
+            android:summary="Use volume buttons as remote control when recording"
+            android:defaultValue="false" />
+
+        <Preference
+            android:key="remote_control_help"
+            android:title="Remote Control Guide"
+            android:summary="Volume Up: Start/Stop recording • Volume Down: Toggle rider detection"
+            android:selectable="false"
+            android:dependency="bluetooth_remote_enabled" />
+
+    </PreferenceCategory>
+
     <PreferenceCategory android:title="Developer">
 
         <SwitchPreferenceCompat
