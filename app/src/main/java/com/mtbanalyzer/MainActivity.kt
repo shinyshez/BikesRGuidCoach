@@ -58,6 +58,9 @@ class MainActivity : AppCompatActivity(),
     
     // Wake lock for preventing sleep during detection
     private lateinit var wakeLock: PowerManager.WakeLock
+    
+    // Timer for manual recording progress
+    private var recordingProgressTimer: java.util.Timer? = null
 
     companion object {
         private const val TAG = "MTBAnalyzer"
@@ -280,6 +283,9 @@ class MainActivity : AppCompatActivity(),
             }
             // Notify rider detection processor that recording has stopped
             riderDetectionProcessor.setRecordingStopped()
+            
+            // Stop progress timer in case this was manual recording
+            stopRecordingProgressTimer()
         }
     }
 
@@ -338,10 +344,50 @@ class MainActivity : AppCompatActivity(),
         if (videoCapture != null && !recordingManager.isRecording()) {
             Log.d(TAG, "Starting manual recording...")
             recordingManager.startRecording(videoCapture, this)
+            
+            // Start progress timer for manual recording
+            startRecordingProgressTimer()
         } else {
             Log.d(TAG, "Stopping manual recording...")
             recordingManager.stopRecording()
+            
+            // Stop progress timer
+            stopRecordingProgressTimer()
         }
+    }
+    
+    private fun startRecordingProgressTimer() {
+        stopRecordingProgressTimer() // Cancel any existing timer
+        
+        recordingProgressTimer = java.util.Timer()
+        recordingProgressTimer?.scheduleAtFixedRate(object : java.util.TimerTask() {
+            override fun run() {
+                if (recordingManager.isRecording()) {
+                    val elapsedMs = recordingManager.getElapsedTime()
+                    runOnUiThread {
+                        uiStateManager.updateRecordingProgress(elapsedMs)
+                    }
+                    
+                    // Check if we've reached max duration
+                    val maxDurationMs = settingsManager.getRecordingDurationMs()
+                    if (elapsedMs >= maxDurationMs) {
+                        Log.d(TAG, "Max recording duration reached, stopping...")
+                        runOnUiThread {
+                            recordingManager.stopRecording()
+                            stopRecordingProgressTimer()
+                        }
+                    }
+                } else {
+                    // Recording stopped, cancel timer
+                    stopRecordingProgressTimer()
+                }
+            }
+        }, 100, 100) // Update every 100ms
+    }
+    
+    private fun stopRecordingProgressTimer() {
+        recordingProgressTimer?.cancel()
+        recordingProgressTimer = null
     }
 
     
@@ -490,6 +536,9 @@ class MainActivity : AppCompatActivity(),
         riderDetectionProcessor.release()
         riderDetectorManager.release()
         cameraExecutor.shutdown()
+        
+        // Clean up recording timer
+        stopRecordingProgressTimer()
         
         // Clear screen on flag and release wake lock
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
