@@ -4,7 +4,8 @@
 
     <PreferenceCategory 
         android:key="detection_category"
-        android:title="Detection Settings">
+        android:title="Detection Settings"
+        android:order="10">
 
         <SwitchPreferenceCompat
             android:key="rider_detection_enabled"
@@ -36,7 +37,8 @@
 
     <!-- Dynamic detector settings will be added here programmatically -->
 
-    <PreferenceCategory android:title="Recording Settings">
+    <PreferenceCategory android:title="Recording Settings"
+        android:order="200">
 
         <SeekBarPreference
             android:key="recording_duration"
@@ -60,7 +62,8 @@
 
     </PreferenceCategory>
 
-    <PreferenceCategory android:title="Feedback">
+    <PreferenceCategory android:title="Feedback"
+        android:order="300">
 
         <SwitchPreferenceCompat
             android:key="haptic_feedback"
@@ -82,7 +85,8 @@
 
     </PreferenceCategory>
 
-    <PreferenceCategory android:title="Remote Control">
+    <PreferenceCategory android:title="Remote Control"
+        android:order="400">
 
         <SwitchPreferenceCompat
             android:key="bluetooth_remote_enabled"
@@ -99,7 +103,8 @@
 
     </PreferenceCategory>
 
-    <PreferenceCategory android:title="Developer">
+    <PreferenceCategory android:title="Developer"
+        android:order="500">
 
         <SwitchPreferenceCompat
             android:key="show_performance_overlay"
@@ -109,7 +114,8 @@
 
     </PreferenceCategory>
 
-    <PreferenceCategory android:title="Storage">
+    <PreferenceCategory android:title="Storage"
+        android:order="600">
 
         <Preference
             android:key="storage_location"
