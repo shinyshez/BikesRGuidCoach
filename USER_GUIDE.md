@@ -17,7 +17,8 @@ The app automatically detects and records riders using computer vision:
 - Videos save automatically to Movies/MTBAnalyzer
 
 ### Manual Recording
-- Tap the "Test Record" button to start/stop recording manually
+- Tap the large circular record button to start/stop recording manually
+- Button shows red dot when idle, red square when recording
 - Useful for testing or when automatic detection isn't needed
 
 ### Video Playback
@@ -32,19 +33,27 @@ Compare two videos side-by-side:
 1. Long press any video in gallery to enter compare mode
 2. First video is automatically selected
 3. Tap a second video to select it for comparison
-4. Tap "Start Comparison" when both videos are selected
+4. Tap "Compare" when both videos are selected
 5. Use "Lock" button to synchronize playback
 6. When locked, controls affect both videos together
 
 Alternative method:
 - Tap the compare button (FAB) to manually enter compare mode
 - Select two videos by tapping them
-- Tap "Start Comparison"
+- Tap "Compare"
+
+### Video Deletion
+Delete unwanted videos using swipe gesture:
+1. In video gallery, swipe any video left or right
+2. Red background with trash icon appears during swipe
+3. Complete the swipe (30% threshold) to trigger delete
+4. Confirm deletion in the dialog that appears
+5. Swipe is disabled during compare mode for safety
 
 ### Settings
 
 #### Detection Settings
-- **Enable/Disable**: Turn automatic detection on/off
+- **Auto-record Toggle**: Turn automatic detection on/off (main screen)
 - **Detection Method**: Choose algorithm (Pose is most accurate)
 - **Sensitivity**: Higher = more sensitive (may get false positives)
 
@@ -63,7 +72,7 @@ Alternative method:
 - Mount phone securely with clear trail view
 - Avoid direct sunlight on lens
 - Keep lens clean for best detection
-- Landscape orientation recommended
+- Both portrait and landscape orientations supported
 
 ### Detection Optimization
 - **Good Lighting**: Works best in daylight
@@ -81,6 +90,7 @@ Alternative method:
 - Videos are saved with timestamp names
 - Gallery shows today's recording count
 - Long recording sessions can use significant storage
+- Use swipe-to-delete gesture to remove unwanted videos
 - Transfer videos regularly to free space
 
 ## Troubleshooting

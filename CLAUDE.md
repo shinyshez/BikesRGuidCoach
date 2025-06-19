@@ -76,8 +76,54 @@ MTB Analyzer is an Android application that uses computer vision to automaticall
 
 ### Important Technical Details
 
-- The app is locked to landscape orientation (AndroidManifest.xml:32)
+- The app supports both portrait and landscape orientation
 - Minimum SDK is 24, target SDK is 34
 - Videos are saved to Movies/MTBAnalyzer directory in external storage
 - Recording automatically starts when a rider is detected and continues for 8 seconds or 2 seconds after the rider leaves frame
 - The pose detection runs in STREAM_MODE for real-time processing
+
+## User Interface
+
+### Main Recording Screen
+
+- **Auto-record Toggle**: Controls automatic rider detection and recording
+- **Large Record Button**: Manual recording with visual feedback (circle with dot → circle with square when recording)
+- **Status Display**: Shows monitoring status, detection confidence, and recording progress (hidden when auto-record is off)
+- **Navigation**: Gallery and Settings buttons positioned on either side of the record button
+
+### Video Gallery
+
+The video gallery displays all recorded MTB videos with the following features:
+
+#### Gesture Controls
+- **Tap**: Play video with pose detection overlay
+- **Long Press**: Enter compare mode to select videos for side-by-side comparison
+- **Swipe Left/Right**: Delete video with confirmation dialog
+
+#### Compare Mode
+- Select up to 2 videos for side-by-side comparison
+- Long press any video to enter compare mode
+- Tap additional videos to select for comparison
+- Use "Compare" button when 2 videos are selected
+
+#### Delete Functionality
+- Swipe any video thumbnail left or right to reveal delete action
+- Visual feedback shows red background with trash icon during swipe
+- Requires 30% swipe threshold to trigger confirmation dialog
+- Confirmation dialog prevents accidental deletions
+- Swipe gestures are disabled during compare mode
+
+### Settings
+
+- **Detector Type**: Choose between ML Kit Pose Detection, Motion Detection, Optical Flow, or Hybrid
+- **Recording Duration**: Set video length (default 8 seconds)
+- **Detection Sensitivity**: Adjust motion and pose detection thresholds
+- **Remote Control**: Enable Bluetooth remote control via volume buttons
+- **Performance Overlay**: Show detection performance metrics
+- **Orientation Support**: Settings screen adapts to device orientation
+
+### Remote Control (Bluetooth)
+
+When enabled in settings:
+- **Volume Up**: Start/stop manual recording
+- **Volume Down**: Toggle auto-record on/off

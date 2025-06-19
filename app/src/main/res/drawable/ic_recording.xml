@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="72dp"
+    android:height="72dp"
+    android:viewportWidth="72"
+    android:viewportHeight="72">
+    
+    <!-- White filled circle -->
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M36,36m-32,0a32,32 0,1 1,64 0a32,32 0,1 1,-64 0" />
+    
+    <!-- Red rounded square (stop icon) -->
+    <path
+        android:fillColor="@android:color/holo_red_light"
+        android:pathData="M24,24 L48,24 Q54,24 54,30 L54,42 Q54,48 48,48 L24,48 Q18,48 18,42 L18,30 Q18,24 24,24 Z" />
+    
+</vector>

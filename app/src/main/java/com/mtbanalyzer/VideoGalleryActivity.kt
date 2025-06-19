@@ -1,21 +1,30 @@
 package com.mtbanalyzer
 
+import android.content.ClipData
 import android.content.ContentUris
 import android.content.Intent
 import android.content.res.Configuration
 import android.database.Cursor
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
 import android.util.Log
+import android.view.DragEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.bumptech.glide.request.RequestOptions
@@ -45,6 +54,7 @@ class VideoGalleryActivity : AppCompatActivity() {
     private val videos = mutableListOf<VideoItem>()
     private val selectedVideos = mutableListOf<VideoItem>()
     private var isCompareMode = false
+    private lateinit var itemTouchHelper: ItemTouchHelper
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -134,6 +144,9 @@ class VideoGalleryActivity : AppCompatActivity() {
         startCompareButton.setOnClickListener {
             startVideoComparison()
         }
+        
+        // Setup swipe to delete
+        setupDragAndDrop()
     }
     
     private fun loadVideos() {
@@ -304,6 +317,141 @@ class VideoGalleryActivity : AppCompatActivity() {
         super.onResume()
         // Refresh the list in case videos were deleted/added
         loadVideos()
+    }
+    
+    private fun setupDragAndDrop() {
+        val callback = object : ItemTouchHelper.SimpleCallback(
+            0, // No drag directions
+            ItemTouchHelper.LEFT or ItemTouchHelper.RIGHT // Swipe directions
+        ) {
+            override fun onMove(
+                recyclerView: RecyclerView,
+                viewHolder: RecyclerView.ViewHolder,
+                target: RecyclerView.ViewHolder
+            ): Boolean = false
+
+            override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {
+                val position = viewHolder.adapterPosition
+                if (position != RecyclerView.NO_POSITION && position < videos.size) {
+                    val video = videos[position]
+                    // Show confirmation dialog and restore item position if cancelled
+                    showDeleteConfirmation(video, position)
+                }
+            }
+
+            override fun getMovementFlags(
+                recyclerView: RecyclerView,
+                viewHolder: RecyclerView.ViewHolder
+            ): Int {
+                // Only enable swipe when not in compare mode
+                return if (!isCompareMode) {
+                    makeMovementFlags(0, ItemTouchHelper.LEFT or ItemTouchHelper.RIGHT)
+                } else {
+                    makeMovementFlags(0, 0)
+                }
+            }
+
+            override fun onChildDraw(
+                c: Canvas,
+                recyclerView: RecyclerView,
+                viewHolder: RecyclerView.ViewHolder,
+                dX: Float,
+                dY: Float,
+                actionState: Int,
+                isCurrentlyActive: Boolean
+            ) {
+                val itemView = viewHolder.itemView
+                val background = ColorDrawable()
+                
+                if (dX > 0) { // Swiping right
+                    background.color = Color.parseColor("#FF4444")
+                    background.setBounds(
+                        itemView.left,
+                        itemView.top,
+                        itemView.left + dX.toInt(),
+                        itemView.bottom
+                    )
+                } else if (dX < 0) { // Swiping left
+                    background.color = Color.parseColor("#FF4444")
+                    background.setBounds(
+                        itemView.right + dX.toInt(),
+                        itemView.top,
+                        itemView.right,
+                        itemView.bottom
+                    )
+                }
+                
+                background.draw(c)
+                
+                // Draw delete icon
+                val deleteIcon = androidx.core.content.ContextCompat.getDrawable(
+                    this@VideoGalleryActivity, 
+                    R.drawable.ic_delete
+                )
+                deleteIcon?.let { icon ->
+                    val iconMargin = (itemView.height - icon.intrinsicHeight) / 2
+                    val iconTop = itemView.top + iconMargin
+                    val iconBottom = iconTop + icon.intrinsicHeight
+                    
+                    if (dX > 0) { // Swiping right
+                        val iconLeft = itemView.left + iconMargin
+                        val iconRight = iconLeft + icon.intrinsicWidth
+                        icon.setBounds(iconLeft, iconTop, iconRight, iconBottom)
+                    } else if (dX < 0) { // Swiping left
+                        val iconRight = itemView.right - iconMargin
+                        val iconLeft = iconRight - icon.intrinsicWidth
+                        icon.setBounds(iconLeft, iconTop, iconRight, iconBottom)
+                    }
+                    
+                    icon.draw(c)
+                }
+                
+                super.onChildDraw(c, recyclerView, viewHolder, dX, dY, actionState, isCurrentlyActive)
+            }
+
+            override fun getSwipeThreshold(viewHolder: RecyclerView.ViewHolder): Float {
+                return 0.3f // Require 30% swipe to trigger delete
+            }
+        }
+
+        itemTouchHelper = ItemTouchHelper(callback)
+        itemTouchHelper.attachToRecyclerView(recyclerView)
+    }
+    
+    private fun showDeleteConfirmation(video: VideoItem, position: Int) {
+        AlertDialog.Builder(this)
+            .setTitle("Delete Video")
+            .setMessage("Are you sure you want to delete '${video.displayName}'?")
+            .setPositiveButton("Delete") { _, _ ->
+                deleteVideo(video)
+            }
+            .setNegativeButton("Cancel") { _, _ ->
+                // Restore the item position
+                adapter.notifyItemChanged(position)
+            }
+            .setOnCancelListener {
+                // Restore the item position if dialog is cancelled
+                adapter.notifyItemChanged(position)
+            }
+            .show()
+    }
+    
+    private fun deleteVideo(video: VideoItem) {
+        try {
+            val rowsDeleted = contentResolver.delete(video.uri, null, null)
+            if (rowsDeleted > 0) {
+                Toast.makeText(this, "Video deleted", Toast.LENGTH_SHORT).show()
+                loadVideos() // Refresh the list
+            } else {
+                Toast.makeText(this, "Failed to delete video", Toast.LENGTH_SHORT).show()
+            }
+        } catch (e: SecurityException) {
+            Log.e(TAG, "Permission denied to delete video", e)
+            Toast.makeText(this, "Permission denied to delete video", Toast.LENGTH_LONG).show()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error deleting video", e)
+            Toast.makeText(this, "Error deleting video: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
     }
 }
 

@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.content.SharedPreferences
+import android.content.res.Configuration
 import android.graphics.Matrix
 import android.os.Build
 import android.os.Bundle
@@ -53,8 +54,9 @@ class MainActivity : AppCompatActivity(),
     private lateinit var recordingProgress: android.widget.ProgressBar
     private lateinit var recordingDot: View
     private lateinit var segmentCount: TextView
-    private lateinit var timeDisplay: TextView
     private lateinit var detectionToggle: SwitchCompat
+    private lateinit var testRecordButton: android.widget.ImageButton
+    private lateinit var statusContainer: View
     
     // Wake lock for preventing sleep during detection
     private lateinit var wakeLock: PowerManager.WakeLock
@@ -94,8 +96,9 @@ class MainActivity : AppCompatActivity(),
             recordingProgress = findViewById(R.id.recordingProgress)
             recordingDot = findViewById(R.id.recordingDot)
             segmentCount = findViewById(R.id.segmentCount)
-            timeDisplay = findViewById(R.id.timeDisplay)
             detectionToggle = findViewById(R.id.detectionToggle)
+            testRecordButton = findViewById(R.id.testRecordButton)
+            statusContainer = findViewById(R.id.statusContainer)
             
             // Initialize navigation buttons
             findViewById<android.widget.ImageButton>(R.id.settingsButton).setOnClickListener {
@@ -106,14 +109,11 @@ class MainActivity : AppCompatActivity(),
                 startActivity(android.content.Intent(this, VideoGalleryActivity::class.java))
             }
             
-            // Update time display
-            updateTimeDisplay()
-            
             // Update video count
             updateVideoCount()
             
             // Test button for manual recording
-            findViewById<android.widget.Button>(R.id.testRecordButton).setOnClickListener {
+            testRecordButton.setOnClickListener {
                 manualStartRecording()
             }
 
@@ -181,18 +181,10 @@ class MainActivity : AppCompatActivity(),
         detectionToggle.setOnCheckedChangeListener { _, isChecked ->
             settingsManager.setRiderDetectionEnabled(isChecked)
             updateDetectionState(isChecked)
-            Toast.makeText(this, if (isChecked) "Rider detection enabled" else "Rider detection disabled", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, if (isChecked) "Auto-record enabled" else "Auto-record disabled", Toast.LENGTH_SHORT).show()
         }
     }
     
-    private fun updateTimeDisplay() {
-        val currentTime = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
-            .format(java.util.Date())
-        timeDisplay.text = currentTime
-        
-        // Update every minute
-        timeDisplay.postDelayed({ updateTimeDisplay() }, 60000)
-    }
     
     private fun updateVideoCount() {
         try {
@@ -269,6 +261,8 @@ class MainActivity : AppCompatActivity(),
             uiStateManager.updateRecordingStarted()
             // Notify rider detection processor that recording has actually started
             riderDetectionProcessor.setRecordingStarted()
+            // Update record button to show recording state
+            testRecordButton.setImageResource(R.drawable.ic_recording)
         }
     }
 
@@ -283,6 +277,9 @@ class MainActivity : AppCompatActivity(),
             }
             // Notify rider detection processor that recording has stopped
             riderDetectionProcessor.setRecordingStopped()
+            
+            // Reset record button to normal state
+            testRecordButton.setImageResource(R.drawable.ic_record)
             
             // Stop progress timer in case this was manual recording
             stopRecordingProgressTimer()
@@ -431,7 +428,7 @@ class MainActivity : AppCompatActivity(),
                 // Update toggle button to match settings
                 detectionToggle.isChecked = enabled
                 updateDetectionState(enabled)
-                Toast.makeText(this, if (enabled) "Rider detection enabled" else "Rider detection disabled", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, if (enabled) "Auto-record enabled" else "Auto-record disabled", Toast.LENGTH_SHORT).show()
             }
             "motion_threshold", "min_motion_area", "show_motion_overlay" -> {
                 // Motion detection settings changed
@@ -455,6 +452,10 @@ class MainActivity : AppCompatActivity(),
             // Enable detection and keep screen on
             riderDetectionProcessor.setDetectionEnabled(true)
             
+            // Show status display
+            statusContainer.visibility = View.VISIBLE
+            recordingStatus.visibility = View.VISIBLE
+            
             // Keep screen on using window flags (most reliable for camera apps)
             window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             
@@ -466,6 +467,10 @@ class MainActivity : AppCompatActivity(),
         } else {
             // Disable detection and allow screen to sleep
             riderDetectionProcessor.setDetectionEnabled(false)
+            
+            // Hide status display
+            statusContainer.visibility = View.GONE
+            recordingStatus.visibility = View.GONE
             
             // Allow screen to turn off
             window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -490,7 +495,7 @@ class MainActivity : AppCompatActivity(),
 
     // Volume key interception for Bluetooth remote control
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        if (settingsManager.isBluetoothRemoteEnabled()) {
+        if (::settingsManager.isInitialized && settingsManager.isBluetoothRemoteEnabled()) {
             when (keyCode) {
                 KeyEvent.KEYCODE_VOLUME_UP -> {
                     // Volume up: Start/stop manual recording
@@ -516,8 +521,8 @@ class MainActivity : AppCompatActivity(),
                     detectionToggle.isChecked = newState
                     updateDetectionState(newState)
                     Toast.makeText(this, 
-                        if (newState) "Rider detection enabled (remote)" 
-                        else "Rider detection disabled (remote)", 
+                        if (newState) "Auto-record enabled (remote)" 
+                        else "Auto-record disabled (remote)", 
                         Toast.LENGTH_SHORT).show()
                     return true // Consume the event
                 }
@@ -526,6 +531,24 @@ class MainActivity : AppCompatActivity(),
         
         // If Bluetooth remote is disabled or key not handled, use default behavior
         return super.onKeyDown(keyCode, event)
+    }
+    
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        
+        val orientation = if (newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE) "landscape" else "portrait"
+        Log.d(TAG, "Orientation changed to: $orientation")
+        
+        // Update UI layout for orientation
+        updateLayoutForOrientation(newConfig.orientation)
+    }
+    
+    private fun updateLayoutForOrientation(orientation: Int) {
+        val orientation = if (orientation == Configuration.ORIENTATION_LANDSCAPE) "landscape" else "portrait"
+        Log.d(TAG, "UI updated for $orientation mode")
+        
+        // The bottom control panel layout automatically adapts to orientation changes
+        // No manual layout adjustments needed since all controls are now in the bottom panel
     }
 
     override fun onDestroy() {

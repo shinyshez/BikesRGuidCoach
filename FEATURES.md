@@ -14,7 +14,7 @@ MTB Analyzer is an Android application that uses computer vision to automaticall
 - **Automatic Recording**: Starts recording when a rider is detected
 - **Configurable Duration**: Default 8-second clips (adjustable 3-30 seconds)
 - **Post-Rider Recording**: Continues recording for 2 seconds after rider leaves frame (adjustable)
-- **Manual Recording**: Test button for manual recording start/stop
+- **Manual Recording**: Large circular record button with visual feedback (red dot → red square)
 
 ### 2. Video Playback & Analysis
 
@@ -36,16 +36,20 @@ MTB Analyzer is an Android application that uses computer vision to automaticall
   - Portrait: Videos stacked vertically
 - **Unified Controls in Lock Mode**: All controls affect both videos when locked
 
-### 3. Video Gallery
+### 3. Video Gallery & Management
 - **Grid Layout**: Responsive grid that adapts to orientation
 - **Aspect Ratio Preservation**: Thumbnails maintain video aspect ratio
 - **Chronological Sorting**: Most recent videos first
 - **Video Selection**: Tap to play, long press for comparison mode
+- **Swipe-to-Delete**: Swipe left/right on any video to delete with confirmation
+- **Visual Feedback**: Red background with trash icon during swipe gesture
+- **Safety Features**: 30% swipe threshold and confirmation dialog prevent accidents
+- **Compare Mode Protection**: Swipe gestures disabled during video selection
 
 ### 4. Settings & Configuration
 
 #### Detection Settings
-- **Enable/Disable Detection**: Toggle automatic rider detection
+- **Auto-record Toggle**: Main screen toggle for automatic rider detection
 - **Detection Method**: Choose between pose, motion, optical flow, or hybrid
 - **Detection Sensitivity**: Adjustable threshold (30-100%)
 - **Motion Detection Settings**: Threshold and minimum area configuration
@@ -71,20 +75,21 @@ MTB Analyzer is an Android application that uses computer vision to automaticall
 ### 5. User Interface
 
 #### Main Recording Screen
+- **Full-Screen Video Preview**: Camera preview covers entire screen
+- **Overlay UI Elements**: All controls overlay the video preview
+- **Large Central Record Button**: 72dp circular button with visual state changes
 - **Status Indicators**: 
-  - Detection state (enabled/disabled)
-  - Recording status
-  - Confidence level
-  - Video count for the day
-- **Quick Controls**:
-  - Detection toggle switch
-  - Settings button
-  - Gallery button
-  - Manual record button
+  - Auto-record toggle (top right)
+  - Recording status and confidence (center, hidden when auto-record off)
+  - Video count for the day (bottom center)
+- **Navigation Controls**:
+  - Gallery button (left of record button)
+  - Settings button (right of record button)
 - **Visual Feedback**:
   - Pulsing ring when detecting
   - Red overlay when recording
   - Progress bar during recording
+  - Record button state changes (dot → square)
 
 #### Video Player Controls
 - **Playback Controls**: Play/pause, frame forward/backward
@@ -126,7 +131,8 @@ MTB Analyzer is an Android application that uses computer vision to automaticall
 2. **Video Gallery**:
    - Tap: Open video in player
    - Long press: Select for comparison
-   - Swipe: Scroll through videos
+   - Swipe left/right: Delete video (with confirmation)
+   - Scroll: Navigate through video grid
 
 ### Synchronization (Comparison Mode)
 - **Lock Mode**: Maintains time offset between videos
@@ -158,6 +164,7 @@ MTB Analyzer is an Android application that uses computer vision to automaticall
 
 ## Known Limitations
 - Minimum Android API 24 (Android 7.0)
-- Landscape orientation locked for recording
+- Supports both portrait and landscape orientations
 - Detection accuracy depends on lighting and camera angle
 - Bluetooth remote requires volume button simulation
+- Swipe-to-delete requires 30% swipe threshold to prevent accidents
