@@ -109,6 +109,10 @@ class MainActivity : AppCompatActivity(),
                 startActivity(android.content.Intent(this, VideoGalleryActivity::class.java))
             }
             
+            findViewById<android.widget.ImageButton>(R.id.zoomTestButton).setOnClickListener {
+                startActivity(android.content.Intent(this, ZoomTestActivity::class.java))
+            }
+            
             // Update video count
             updateVideoCount()
             

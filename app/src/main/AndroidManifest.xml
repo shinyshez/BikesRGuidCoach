@@ -66,6 +66,13 @@
             android:parentActivityName=".VideoGalleryActivity"
             android:configChanges="orientation|screenSize|keyboardHidden"
             android:screenOrientation="sensor" />
+            
+        <activity
+            android:name=".ZoomTestActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:screenOrientation="sensor" />
 
     </application>
 

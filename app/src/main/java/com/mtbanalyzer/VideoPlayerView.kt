@@ -41,6 +41,7 @@ class VideoPlayerView @JvmOverloads constructor(
     }
     
     // UI Components
+    private lateinit var zoomContainer: ZoomablePlayerContainer
     private lateinit var playerView: PlayerView
     private lateinit var graphicOverlay: GraphicOverlay
     private lateinit var scrubOverlay: ScrubOverlay
@@ -94,14 +95,7 @@ class VideoPlayerView @JvmOverloads constructor(
     private val scrubSensitivity = 2.0f // Pixels per millisecond
     private val holdDuration = 500L // Time to hold before scrubbing starts
     
-    // Zoom and pan state
-    private var currentZoom = 1.0f
-    private val minZoom = 1.0f
-    private val maxZoom = 5.0f
-    private var panX = 0f
-    private var panY = 0f
-    private lateinit var scaleGestureDetector: ScaleGestureDetector
-    private lateinit var gestureDetector: GestureDetector
+    // Zoom is now handled by ZoomablePlayerContainer
     
     init {
         LayoutInflater.from(context).inflate(R.layout.view_video_player, this, true)
@@ -109,10 +103,11 @@ class VideoPlayerView @JvmOverloads constructor(
         initializePoseDetector()
         initializePlayer()
         setupControls()
-        setupZoomGestures()
+        // Zoom gestures are now handled by ZoomablePlayerContainer
     }
     
     private fun initializeViews() {
+        zoomContainer = findViewById(R.id.zoomContainer)
         playerView = findViewById(R.id.playerView)
         graphicOverlay = findViewById(R.id.graphic_overlay)
         scrubOverlay = findViewById(R.id.scrub_overlay)
@@ -398,13 +393,13 @@ class VideoPlayerView @JvmOverloads constructor(
         var holdCheckRunnable: Runnable? = null
         
         playerView.setOnTouchListener { _, event ->
-            // First, handle zoom gestures
-            scaleGestureDetector.onTouchEvent(event)
-            gestureDetector.onTouchEvent(event)
-            
-            // If we're zoomed in or zooming, don't handle scrub/tap gestures
-            if (currentZoom > 1.0f || scaleGestureDetector.isInProgress) {
-                return@setOnTouchListener true
+            // When paused, let the zoom container handle touch events
+            if (!isPlaying) {
+                // Pass the event to zoom container first
+                val handled = zoomContainer.onTouchEvent(event)
+                if (handled || zoomContainer.isZoomed()) {
+                    return@setOnTouchListener true
+                }
             }
             
             when (event.action) {
@@ -551,163 +546,20 @@ class VideoPlayerView @JvmOverloads constructor(
         scrubOverlay.updateTimeDisplay(currentTime, totalTime)
     }
     
-    private fun setupZoomGestures() {
-        // Scale gesture detector for pinch-to-zoom
-        scaleGestureDetector = ScaleGestureDetector(context, object : ScaleGestureDetector.OnScaleGestureListener {
-            private var lastScaleFactor = 1f
-            
-            override fun onScale(detector: ScaleGestureDetector): Boolean {
-                // Only allow zoom when video is paused
-                if (isPlaying) {
-                    return false
-                }
-                
-                val scaleFactor = detector.scaleFactor
-                
-                // Apply scale factor directly for more fluid zooming
-                currentZoom *= scaleFactor
-                
-                // Constrain zoom level smoothly
-                currentZoom = currentZoom.coerceIn(minZoom, maxZoom)
-                
-                // Calculate focal point for zoom
-                val focusX = detector.focusX
-                val focusY = detector.focusY
-                
-                // Adjust pan to zoom towards the focal point
-                if (scaleFactor != 1f) {
-                    panX = (panX - (focusX - playerView.width / 2f)) * scaleFactor + (focusX - playerView.width / 2f)
-                    panY = (panY - (focusY - playerView.height / 2f)) * scaleFactor + (focusY - playerView.height / 2f)
-                }
-                
-                // Constrain pan
-                constrainPan()
-                
-                // Apply zoom transformation smoothly
-                applyZoomTransformation()
-                
-                lastScaleFactor = scaleFactor
-                return true
-            }
-            
-            override fun onScaleBegin(detector: ScaleGestureDetector): Boolean {
-                // Pause video if playing when zoom starts
-                if (isPlaying) {
-                    pause()
-                }
-                lastScaleFactor = 1f
-                return true
-            }
-            
-            override fun onScaleEnd(detector: ScaleGestureDetector) {
-                // Optional: Add any cleanup or snapping behavior here
-            }
-        })
-        
-        // Gesture detector for panning when zoomed
-        gestureDetector = GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
-            override fun onScroll(
-                e1: MotionEvent?,
-                e2: MotionEvent,
-                distanceX: Float,
-                distanceY: Float
-            ): Boolean {
-                // Only allow panning when zoomed in
-                if (currentZoom <= 1.0f || scaleGestureDetector.isInProgress) {
-                    return false
-                }
-                
-                // Update pan position with zoom factor consideration
-                panX -= distanceX / currentZoom
-                panY -= distanceY / currentZoom
-                
-                // Constrain pan to keep video visible
-                constrainPan()
-                
-                // Apply transformation
-                applyZoomTransformation()
-                
-                return true
-            }
-            
-            override fun onDoubleTap(e: MotionEvent): Boolean {
-                // Toggle between zoomed and normal view
-                if (currentZoom > 1.0f) {
-                    // Animate zoom out
-                    animateZoomTo(1.0f, 0f, 0f)
-                } else {
-                    // Zoom in to 2x at the tap point
-                    val targetZoom = 2.5f
-                    val focusX = e.x
-                    val focusY = e.y
-                    
-                    // Calculate pan to center on tap point
-                    val targetPanX = (playerView.width / 2f - focusX) * (targetZoom - 1f)
-                    val targetPanY = (playerView.height / 2f - focusY) * (targetZoom - 1f)
-                    
-                    animateZoomTo(targetZoom, targetPanX, targetPanY)
-                }
-                return true
-            }
-        })
+    // Zoom gestures are handled by ZoomablePlayerContainer
+    
+    private fun resetZoom() {
+        zoomContainer.reset()
     }
     
-    private fun animateZoomTo(targetZoom: Float, targetPanX: Float, targetPanY: Float) {
-        playerView.animate()
-            .scaleX(targetZoom)
-            .scaleY(targetZoom)
-            .translationX(targetPanX)
-            .translationY(targetPanY)
-            .setDuration(250)
-            .setInterpolator(android.view.animation.DecelerateInterpolator())
-            .withEndAction {
-                currentZoom = targetZoom
-                panX = targetPanX
-                panY = targetPanY
-                constrainPan()
-                applyZoomTransformation()
-            }
-            .start()
-    }
+    // Zoom transformation is handled by ZoomablePlayerContainer
     
-    private fun applyZoomTransformation() {
-        // Apply transformation using scale and translation on the PlayerView itself
-        playerView.scaleX = currentZoom
-        playerView.scaleY = currentZoom
-        playerView.translationX = panX
-        playerView.translationY = panY
-    }
+    // Touch events for zoom are handled by ZoomablePlayerContainer
     
-    private fun constrainPan() {
-        if (currentZoom <= 1.0f) {
-            panX = 0f
-            panY = 0f
-            return
-        }
-        
-        val viewWidth = playerView.width.toFloat()
-        val viewHeight = playerView.height.toFloat()
-        
-        // Calculate how much the scaled view extends beyond the original bounds
-        val scaledWidth = viewWidth * currentZoom
-        val scaledHeight = viewHeight * currentZoom
-        
-        // Maximum pan is half of the difference between scaled and original size
-        val maxPanX = max(0f, (scaledWidth - viewWidth) / 2f)
-        val maxPanY = max(0f, (scaledHeight - viewHeight) / 2f)
-        
-        // Constrain pan values to keep video content visible
-        panX = panX.coerceIn(-maxPanX, maxPanX)
-        panY = panY.coerceIn(-maxPanY, maxPanY)
-    }
-    
-    fun resetZoom() {
-        animateZoomTo(1.0f, 0f, 0f)
-    }
     
     fun play() {
         // Reset zoom when starting playback
-        if (currentZoom > 1.0f) {
+        if (zoomContainer.isZoomed()) {
             resetZoom()
         }
         

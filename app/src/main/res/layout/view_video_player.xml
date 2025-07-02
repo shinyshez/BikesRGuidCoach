@@ -2,18 +2,26 @@
 <merge xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
-    <!-- Media3 PlayerView for frame-accurate seeking -->
-    <androidx.media3.ui.PlayerView
-        android:id="@+id/playerView"
+    <!-- Zoomable container wrapping the PlayerView -->
+    <com.mtbanalyzer.ZoomablePlayerContainer
+        android:id="@+id/zoomContainer"
         android:layout_width="0dp"
         android:layout_height="0dp"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:use_controller="false"
-        app:resize_mode="fit"
-        app:surface_type="texture_view" />
+        app:layout_constraintEnd_toEndOf="parent">
+        
+        <!-- Media3 PlayerView for frame-accurate seeking -->
+        <androidx.media3.ui.PlayerView
+            android:id="@+id/playerView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            app:use_controller="false"
+            app:resize_mode="fit"
+            app:surface_type="texture_view" />
+            
+    </com.mtbanalyzer.ZoomablePlayerContainer>
 
 
     <!-- Pose detection overlay -->

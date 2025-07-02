@@ -147,6 +147,16 @@
                 android:src="@android:drawable/ic_menu_preferences"
                 app:tint="@android:color/white"
                 android:contentDescription="Settings" />
+                
+            <ImageButton
+                android:id="@+id/zoomTestButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="12dp"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:src="@android:drawable/ic_menu_zoom"
+                app:tint="@android:color/white"
+                android:contentDescription="Zoom Test" />
         </LinearLayout>
         
         <!-- Video Count -->
