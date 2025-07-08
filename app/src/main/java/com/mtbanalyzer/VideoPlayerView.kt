@@ -84,6 +84,7 @@ class VideoPlayerView @JvmOverloads constructor(
     private var onFrameStepListener: ((forward: Boolean) -> Unit)? = null
     private var onScrubListener: ((position: Int) -> Unit)? = null
     private var onPlayPauseListener: ((play: Boolean) -> Unit)? = null
+    private var onVideoTapListener: (() -> Unit)? = null
     
     private val mainHandler = Handler(Looper.getMainLooper())
     private var seekBarUpdateRunnable: Runnable? = null
@@ -480,9 +481,12 @@ class VideoPlayerView @JvmOverloads constructor(
                             stopScrubbing()
                             true
                         } else {
-                            // If it was a quick tap, toggle play/pause
+                            // If it was a quick tap, handle play/pause and notify parent
                             val holdDuration = System.currentTimeMillis() - holdStartTime
                             if (holdDuration < 200 && !zoomContainer.isZoomed()) { // Quick tap threshold
+                                // Notify parent activity about tap for controls toggle
+                                onVideoTapListener?.invoke()
+                                
                                 if (isPlaying) {
                                     // Check for override listener
                                     if (onPlayPauseListener != null) {
@@ -905,6 +909,10 @@ class VideoPlayerView @JvmOverloads constructor(
     
     fun setOnPlayPauseListener(listener: (play: Boolean) -> Unit) {
         onPlayPauseListener = listener
+    }
+    
+    fun setOnVideoTapListener(listener: () -> Unit) {
+        onVideoTapListener = listener
     }
     
     fun handleOrientationChange(newConfig: Configuration) {

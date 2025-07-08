@@ -96,6 +96,10 @@ class VideoPlaybackActivity : AppCompatActivity() {
         videoPlayerView.setOnVideoCompletionListener {
             showControls()
         }
+        
+        videoPlayerView.setOnVideoTapListener {
+            toggleControls()
+        }
     }
     
     private fun enableFullScreenMode() {
@@ -127,20 +131,7 @@ class VideoPlaybackActivity : AppCompatActivity() {
     private fun setupTouchListener() {
         // Handle touches on the video title for showing/hiding controls
         videoTitle.setOnClickListener {
-            if (controlsVisible) {
-                hideControls()
-            } else {
-                showControls()
-            }
-        }
-        
-        // Handle direct touches on the video view background areas
-        videoPlayerView.setOnClickListener {
-            if (controlsVisible) {
-                hideControls()
-            } else {
-                showControls()
-            }
+            toggleControls()
         }
     }
     
@@ -201,6 +192,14 @@ class VideoPlaybackActivity : AppCompatActivity() {
         mainHandler.removeCallbacks(hideControlsRunnable)
         if (videoPlayerView.isPlaying()) {
             mainHandler.postDelayed(hideControlsRunnable, showControlsDelay)
+        }
+    }
+    
+    private fun toggleControls() {
+        if (controlsVisible) {
+            hideControls()
+        } else {
+            showControls()
         }
     }
     
