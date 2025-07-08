@@ -45,13 +45,28 @@ class VideoPlayerView @JvmOverloads constructor(
     private lateinit var playerView: PlayerView
     private lateinit var graphicOverlay: GraphicOverlay
     private lateinit var scrubOverlay: ScrubOverlay
+    private lateinit var drawingOverlay: DrawingOverlay
     private lateinit var playPauseButton: ImageButton
     private lateinit var frameForwardButton: ImageButton
     private lateinit var frameBackwardButton: ImageButton
     private lateinit var seekBar: SeekBar
     private lateinit var timeDisplay: TextView
     private lateinit var poseToggleButton: Button
+    private lateinit var drawingToggleButton: Button
     private lateinit var loadingIndicator: ProgressBar
+    
+    // Drawing toolbar elements
+    private lateinit var drawingToolbar: LinearLayout
+    private lateinit var penButton: ImageButton
+    private lateinit var highlighterButton: ImageButton
+    private lateinit var arrowButton: ImageButton
+    private lateinit var circleButton: ImageButton
+    private lateinit var lineButton: ImageButton
+    private lateinit var eraserButton: ImageButton
+    private lateinit var colorIndicator: View
+    private lateinit var colorButton: ImageButton
+    private lateinit var undoButton: ImageButton
+    private lateinit var clearButton: ImageButton
     
     // Media3 ExoPlayer
     private var exoPlayer: ExoPlayer? = null
@@ -96,6 +111,11 @@ class VideoPlayerView @JvmOverloads constructor(
     private val scrubSensitivity = 2.0f // Pixels per millisecond
     private val holdDuration = 500L // Time to hold before scrubbing starts
     
+    // Drawing state
+    private var isDrawingMode = false
+    private var currentDrawingTool = DrawingOverlay.DrawingTool.PEN
+    private var currentDrawingColor = android.graphics.Color.RED
+    
     // Zoom is now handled by ZoomablePlayerContainer
     
     init {
@@ -112,13 +132,28 @@ class VideoPlayerView @JvmOverloads constructor(
         playerView = findViewById(R.id.playerView)
         graphicOverlay = findViewById(R.id.graphic_overlay)
         scrubOverlay = findViewById(R.id.scrub_overlay)
+        drawingOverlay = findViewById(R.id.drawing_overlay)
         playPauseButton = findViewById(R.id.playPauseButton)
         frameForwardButton = findViewById(R.id.frameForwardButton)
         frameBackwardButton = findViewById(R.id.frameBackwardButton)
         seekBar = findViewById(R.id.seekBar)
         timeDisplay = findViewById(R.id.timeDisplay)
         poseToggleButton = findViewById(R.id.poseToggleButton)
+        drawingToggleButton = findViewById(R.id.drawingToggleButton)
         loadingIndicator = findViewById(R.id.loadingIndicator)
+        
+        // Initialize drawing toolbar
+        drawingToolbar = findViewById(R.id.drawingToolbar)
+        penButton = findViewById(R.id.penButton)
+        highlighterButton = findViewById(R.id.highlighterButton)
+        arrowButton = findViewById(R.id.arrowButton)
+        circleButton = findViewById(R.id.circleButton)
+        lineButton = findViewById(R.id.lineButton)
+        eraserButton = findViewById(R.id.eraserButton)
+        colorIndicator = findViewById(R.id.colorIndicator)
+        colorButton = findViewById(R.id.colorButton)
+        undoButton = findViewById(R.id.undoButton)
+        clearButton = findViewById(R.id.clearButton)
         
         Log.d(TAG, "Views initialized successfully")
     }
@@ -280,6 +315,12 @@ class VideoPlayerView @JvmOverloads constructor(
             togglePoseDetection()
         }
         
+        drawingToggleButton.setOnClickListener {
+            toggleDrawingMode()
+        }
+        
+        setupDrawingControls()
+        
         setupSeekBar()
         
         setupScrubGesture()
@@ -388,6 +429,87 @@ class VideoPlayerView @JvmOverloads constructor(
         })
     }
     
+    private fun setupDrawingControls() {
+        // Tool selection buttons
+        penButton.setOnClickListener { selectDrawingTool(DrawingOverlay.DrawingTool.PEN) }
+        highlighterButton.setOnClickListener { selectDrawingTool(DrawingOverlay.DrawingTool.HIGHLIGHTER) }
+        arrowButton.setOnClickListener { selectDrawingTool(DrawingOverlay.DrawingTool.ARROW) }
+        circleButton.setOnClickListener { selectDrawingTool(DrawingOverlay.DrawingTool.CIRCLE) }
+        lineButton.setOnClickListener { selectDrawingTool(DrawingOverlay.DrawingTool.LINE) }
+        eraserButton.setOnClickListener { selectDrawingTool(DrawingOverlay.DrawingTool.ERASER) }
+        
+        // Color selection
+        colorButton.setOnClickListener { showColorPicker() }
+        
+        // Actions
+        undoButton.setOnClickListener { drawingOverlay.undoLastDrawing() }
+        clearButton.setOnClickListener { drawingOverlay.clearAllDrawings() }
+        
+        // Set initial tool
+        selectDrawingTool(DrawingOverlay.DrawingTool.PEN)
+    }
+    
+    private fun toggleDrawingMode() {
+        isDrawingMode = !isDrawingMode
+        
+        drawingToggleButton.text = if (isDrawingMode) "Exit Draw" else "Draw"
+        drawingToolbar.visibility = if (isDrawingMode) View.VISIBLE else View.GONE
+        drawingOverlay.setDrawingEnabled(isDrawingMode)
+        
+        Log.d(TAG, "Drawing mode: $isDrawingMode")
+    }
+    
+    private fun selectDrawingTool(tool: DrawingOverlay.DrawingTool) {
+        currentDrawingTool = tool
+        drawingOverlay.setCurrentTool(tool)
+        
+        // Update button states (highlight selected tool)
+        resetDrawingButtonStates()
+        when (tool) {
+            DrawingOverlay.DrawingTool.PEN -> penButton.alpha = 1.0f
+            DrawingOverlay.DrawingTool.HIGHLIGHTER -> highlighterButton.alpha = 1.0f
+            DrawingOverlay.DrawingTool.ARROW -> arrowButton.alpha = 1.0f
+            DrawingOverlay.DrawingTool.CIRCLE -> circleButton.alpha = 1.0f
+            DrawingOverlay.DrawingTool.LINE -> lineButton.alpha = 1.0f
+            DrawingOverlay.DrawingTool.ERASER -> eraserButton.alpha = 1.0f
+        }
+        
+        Log.d(TAG, "Selected drawing tool: $tool")
+    }
+    
+    private fun resetDrawingButtonStates() {
+        penButton.alpha = 0.6f
+        highlighterButton.alpha = 0.6f
+        arrowButton.alpha = 0.6f
+        circleButton.alpha = 0.6f
+        lineButton.alpha = 0.6f
+        eraserButton.alpha = 0.6f
+    }
+    
+    private fun showColorPicker() {
+        val colors = arrayOf(
+            android.graphics.Color.RED,
+            android.graphics.Color.BLUE,
+            android.graphics.Color.GREEN,
+            android.graphics.Color.YELLOW,
+            android.graphics.Color.BLACK,
+            android.graphics.Color.WHITE,
+            android.graphics.Color.MAGENTA,
+            android.graphics.Color.CYAN
+        )
+        
+        val colorNames = arrayOf("Red", "Blue", "Green", "Yellow", "Black", "White", "Magenta", "Cyan")
+        
+        val builder = androidx.appcompat.app.AlertDialog.Builder(context)
+        builder.setTitle("Choose Color")
+        builder.setItems(colorNames) { _, which ->
+            currentDrawingColor = colors[which]
+            drawingOverlay.setCurrentColor(currentDrawingColor)
+            colorIndicator.setBackgroundColor(currentDrawingColor)
+        }
+        builder.show()
+    }
+    
     private fun setupScrubGesture() {
         // Set up touch listener on the PlayerView for scrub gesture
         var holdStartTime = 0L
@@ -414,7 +536,15 @@ class VideoPlayerView @JvmOverloads constructor(
                 }
             }
             
-            // When paused and not in scrub mode, delegate to zoom container for multi-touch gestures
+            // Priority 1: Drawing mode (when enabled)
+            if (isDrawingMode) {
+                val handled = drawingOverlay.onTouchEvent(event)
+                if (handled) {
+                    return@setOnTouchListener true
+                }
+            }
+            
+            // Priority 2: When paused and not in scrub mode, delegate to zoom container for multi-touch gestures
             if (!isPlaying && !isScrubbing && (isMultiTouch || zoomContainer.isZoomed())) {
                 val handled = zoomContainer.onTouchEvent(event)
                 if (handled) {
@@ -619,6 +749,9 @@ class VideoPlayerView @JvmOverloads constructor(
         seekBar.progress = position
         currentFrameIndex = ((position * frameRate) / 1000.0).toLong()
         updateTimeDisplay(position)
+        
+        // Update drawing overlay with new timestamp
+        drawingOverlay.setCurrentVideoTimestamp(position.toLong())
     }
     
     fun getCurrentPosition(): Int = exoPlayer?.currentPosition?.toInt() ?: 0
@@ -876,6 +1009,9 @@ class VideoPlayerView @JvmOverloads constructor(
                     seekBar.progress = currentPosition
                     currentFrameIndex = ((currentPosition * frameRate) / 1000.0).toLong()
                     updateTimeDisplay(currentPosition)
+                    
+                    // Update drawing overlay with current timestamp
+                    drawingOverlay.setCurrentVideoTimestamp(currentPosition.toLong())
                 }
                 mainHandler.postDelayed(this, 100)
             }

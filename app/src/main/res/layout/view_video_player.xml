@@ -45,6 +45,17 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
+        
+    <!-- Drawing overlay -->
+    <com.mtbanalyzer.DrawingOverlay
+        android:id="@+id/drawing_overlay"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="visible"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
 
     <!-- Loading indicator -->
     <ProgressBar
@@ -137,9 +148,121 @@
                 android:layout_height="48dp"
                 android:text="Show Pose"
                 android:textColor="@android:color/white"
+                android:background="@drawable/button_overlay_background"
+                android:layout_marginEnd="16dp" />
+
+            <Button
+                android:id="@+id/drawingToggleButton"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:text="Draw"
+                android:textColor="@android:color/white"
                 android:background="@drawable/button_overlay_background" />
 
         </LinearLayout>
+
+    </LinearLayout>
+
+    <!-- Drawing toolbar -->
+    <LinearLayout
+        android:id="@+id/drawingToolbar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:background="@drawable/controls_gradient_top"
+        android:padding="12dp"
+        android:gravity="center"
+        android:visibility="gone"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <ImageButton
+            android:id="@+id/penButton"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:src="@android:drawable/ic_menu_edit"
+            android:background="@drawable/button_circle_background"
+            android:contentDescription="Pen"
+            android:layout_marginEnd="8dp" />
+
+        <ImageButton
+            android:id="@+id/highlighterButton"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:src="@android:drawable/ic_menu_edit"
+            android:background="@drawable/button_circle_background"
+            android:contentDescription="Highlighter"
+            android:layout_marginEnd="8dp" />
+
+        <ImageButton
+            android:id="@+id/arrowButton"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:src="@android:drawable/ic_media_play"
+            android:background="@drawable/button_circle_background"
+            android:contentDescription="Arrow"
+            android:layout_marginEnd="8dp" />
+
+        <ImageButton
+            android:id="@+id/circleButton"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:src="@android:drawable/ic_menu_compass"
+            android:background="@drawable/button_circle_background"
+            android:contentDescription="Circle"
+            android:layout_marginEnd="8dp" />
+
+        <ImageButton
+            android:id="@+id/lineButton"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:src="@android:drawable/ic_menu_sort_by_size"
+            android:background="@drawable/button_circle_background"
+            android:contentDescription="Line"
+            android:layout_marginEnd="8dp" />
+
+        <ImageButton
+            android:id="@+id/eraserButton"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:src="@android:drawable/ic_menu_delete"
+            android:background="@drawable/button_circle_background"
+            android:contentDescription="Eraser"
+            android:layout_marginEnd="16dp" />
+
+        <View
+            android:id="@+id/colorIndicator"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:background="@android:color/holo_red_dark"
+            android:layout_marginEnd="8dp" />
+
+        <ImageButton
+            android:id="@+id/colorButton"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:src="@android:drawable/ic_menu_gallery"
+            android:background="@drawable/button_circle_background"
+            android:contentDescription="Color"
+            android:layout_marginEnd="16dp" />
+
+        <ImageButton
+            android:id="@+id/undoButton"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:src="@android:drawable/ic_menu_revert"
+            android:background="@drawable/button_circle_background"
+            android:contentDescription="Undo"
+            android:layout_marginEnd="8dp" />
+
+        <ImageButton
+            android:id="@+id/clearButton"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:src="@android:drawable/ic_menu_close_clear_cancel"
+            android:background="@drawable/button_circle_background"
+            android:contentDescription="Clear All" />
 
     </LinearLayout>
 
