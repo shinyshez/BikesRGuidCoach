@@ -495,8 +495,8 @@ class VideoAdapter(
             .load(video.uri)
             .apply(RequestOptions()
                 .fitCenter()
-                .placeholder(R.drawable.ic_launcher_foreground)
-                .error(R.drawable.ic_launcher_foreground))
+                .placeholder(R.mipmap.ic_launcher)
+                .error(R.mipmap.ic_launcher))
             .into(holder.thumbnail)
         
         // Handle compare mode UI

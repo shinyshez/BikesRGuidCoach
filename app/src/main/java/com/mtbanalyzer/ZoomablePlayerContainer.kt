@@ -8,6 +8,7 @@ import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.widget.FrameLayout
+import android.util.Log
 
 /**
  * A container that wraps PlayerView and provides zoom functionality.
@@ -29,7 +30,7 @@ class ZoomablePlayerContainer @JvmOverloads constructor(
     private var oldDist = 1f
     
     // Zoom limits
-    private val minScale = 0.5f
+    private val minScale = 1.0f
     private val maxScale = 10f
     private var currentScale = 1f
     
@@ -37,6 +38,7 @@ class ZoomablePlayerContainer @JvmOverloads constructor(
     private val scaleGestureDetector: ScaleGestureDetector
     
     companion object {
+        private const val TAG = "ZoomablePlayerContainer"
         const val NONE = 0
         const val DRAG = 1
         const val ZOOM = 2
@@ -54,6 +56,7 @@ class ZoomablePlayerContainer @JvmOverloads constructor(
                 if (newScale in minScale..maxScale) {
                     matrix.postScale(scaleFactor, scaleFactor, focusX, focusY)
                     currentScale = newScale
+                    constrainMatrix()
                     invalidate()
                 }
                 
@@ -94,6 +97,7 @@ class ZoomablePlayerContainer @JvmOverloads constructor(
                     val dx = event.x - start.x
                     val dy = event.y - start.y
                     matrix.postTranslate(dx, dy)
+                    constrainMatrix()
                     invalidate()
                 }
             }
@@ -101,6 +105,61 @@ class ZoomablePlayerContainer @JvmOverloads constructor(
         
         return true
     }
+    
+    private fun constrainMatrix() {
+        if (currentScale <= 1.0f) {
+            // If not zoomed, reset to center
+            matrix.reset()
+            currentScale = 1.0f
+            return
+        }
+        
+        // Get current matrix values
+        val values = FloatArray(9)
+        matrix.getValues(values)
+        val currentTransX = values[Matrix.MTRANS_X]
+        val currentTransY = values[Matrix.MTRANS_Y]
+        val currentScaleX = values[Matrix.MSCALE_X]
+        val currentScaleY = values[Matrix.MSCALE_Y]
+        
+        // Calculate the actual dimensions of scaled content
+        val scaledWidth = width * currentScaleX
+        val scaledHeight = height * currentScaleY
+        
+        // Calculate how much the content exceeds the view bounds
+        val widthDiff = scaledWidth - width
+        val heightDiff = scaledHeight - height
+        
+        var newTransX = currentTransX
+        var newTransY = currentTransY
+        
+        // Only constrain if content is larger than view
+        if (widthDiff > 0) {
+            // Content wider than view - allow panning within excess area
+            newTransX = newTransX.coerceIn(-widthDiff, 0f)
+        } else {
+            // Content smaller than view - center it
+            newTransX = (width - scaledWidth) / 2f
+        }
+        
+        if (heightDiff > 0) {
+            // Content taller than view - allow panning within excess area
+            newTransY = newTransY.coerceIn(-heightDiff, 0f)
+        } else {
+            // Content smaller than view - center it
+            newTransY = (height - scaledHeight) / 2f
+        }
+        
+        // Apply new translation if changed
+        if (newTransX != currentTransX || newTransY != currentTransY) {
+            val deltaX = newTransX - currentTransX
+            val deltaY = newTransY - currentTransY
+            Log.d(TAG, "Constraining: trans($currentTransX,$currentTransY) -> ($newTransX,$newTransY), delta($deltaX,$deltaY)")
+            Log.d(TAG, "Scale: $currentScaleX, View: ${width}x${height}, Scaled: ${scaledWidth}x${scaledHeight}")
+            matrix.postTranslate(deltaX, deltaY)
+        }
+    }
+    
     
     private fun spacing(event: MotionEvent): Float {
         val x = event.getX(0) - event.getX(1)
@@ -134,5 +193,15 @@ class ZoomablePlayerContainer @JvmOverloads constructor(
     override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
         // Don't intercept - we'll handle events passed from VideoPlayerView
         return false
+    }
+    
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        
+        // If view size changed (orientation change), reset zoom to prevent issues
+        if (oldw != 0 && oldh != 0 && (oldw != w || oldh != h)) {
+            // Reset zoom state on orientation change
+            reset()
+        }
     }
 }

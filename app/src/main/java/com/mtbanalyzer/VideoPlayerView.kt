@@ -887,6 +887,8 @@ class VideoPlayerView @JvmOverloads constructor(
         // Media3 PlayerView handles orientation changes automatically
         post {
             playerView.requestLayout()
+            // Reset zoom on orientation change to prevent issues with new dimensions
+            zoomContainer.reset()
         }
     }
     
