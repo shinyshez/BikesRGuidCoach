@@ -391,98 +391,123 @@ class VideoPlayerView @JvmOverloads constructor(
         // Set up touch listener on the PlayerView for scrub gesture
         var holdStartTime = 0L
         var holdCheckRunnable: Runnable? = null
+        var isMultiTouch = false
         
         playerView.setOnTouchListener { _, event ->
-            // When paused, let the zoom container handle touch events
-            if (!isPlaying) {
-                // Pass the event to zoom container first
+            // Track multi-touch state
+            when (event.actionMasked) {
+                MotionEvent.ACTION_POINTER_DOWN -> {
+                    isMultiTouch = true
+                    // Cancel any pending scrub operations when multi-touch detected
+                    holdCheckRunnable?.let { mainHandler.removeCallbacks(it) }
+                    holdCheckRunnable = null
+                    if (isScrubbing) {
+                        stopScrubbing()
+                    }
+                }
+                MotionEvent.ACTION_POINTER_UP -> {
+                    // Stay in multi-touch mode until all fingers are lifted
+                    if (event.pointerCount <= 2) {
+                        isMultiTouch = false
+                    }
+                }
+            }
+            
+            // When paused and not in scrub mode, delegate to zoom container for multi-touch gestures
+            if (!isPlaying && !isScrubbing && (isMultiTouch || zoomContainer.isZoomed())) {
                 val handled = zoomContainer.onTouchEvent(event)
-                if (handled || zoomContainer.isZoomed()) {
+                if (handled) {
                     return@setOnTouchListener true
                 }
             }
             
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    // Start tracking hold duration
-                    holdStartTime = System.currentTimeMillis()
-                    scrubStartX = event.x
-                    scrubStartPosition = getCurrentPosition()
-                    
-                    // Cancel any existing hold check
-                    holdCheckRunnable?.let { mainHandler.removeCallbacks(it) }
-                    
-                    // Schedule check for hold duration
-                    holdCheckRunnable = Runnable {
-                        if (!isScrubbing && !isPlaying) {
-                            // Enter scrub mode
-                            startScrubbing()
-                        }
-                    }
-                    mainHandler.postDelayed(holdCheckRunnable!!, holdDuration)
-                    
-                    true // Consume the event
-                }
-                
-                MotionEvent.ACTION_MOVE -> {
-                    if (isScrubbing) {
-                        // Calculate seek position based on drag distance
-                        val deltaX = event.x - scrubStartX
-                        val deltaMs = (deltaX * scrubSensitivity).toInt()
-                        val newPosition = (scrubStartPosition + deltaMs).coerceIn(0, videoDuration.toInt())
+            // Single finger gestures (scrubbing or tap to play/pause)
+            if (!isMultiTouch) {
+                when (event.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        // Start tracking hold duration for scrubbing
+                        holdStartTime = System.currentTimeMillis()
+                        scrubStartX = event.x
+                        scrubStartPosition = getCurrentPosition()
                         
-                        // Update scrub overlay
-                        val progress = newPosition.toFloat() / videoDuration.toFloat()
-                        scrubOverlay.updateScrubPosition(progress)
-                        updateScrubTimeDisplay(newPosition)
+                        // Cancel any existing hold check
+                        holdCheckRunnable?.let { mainHandler.removeCallbacks(it) }
                         
-                        // Perform the seek
-                        seekTo(newPosition)
-                        
-                        // Notify scrub listener if set (for video comparison sync)
-                        onScrubListener?.invoke(newPosition)
-                        
-                        true
-                    } else {
-                        false
-                    }
-                }
-                
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    // Cancel hold check if not yet in scrub mode
-                    holdCheckRunnable?.let { mainHandler.removeCallbacks(it) }
-                    holdCheckRunnable = null
-                    
-                    if (isScrubbing) {
-                        // Exit scrub mode
-                        stopScrubbing()
-                        true
-                    } else {
-                        // If it was a quick tap and not playing, toggle play/pause
-                        val holdDuration = System.currentTimeMillis() - holdStartTime
-                        if (holdDuration < 200) { // Quick tap threshold
-                            if (isPlaying) {
-                                // Check for override listener
-                                if (onPlayPauseListener != null) {
-                                    onPlayPauseListener!!(false) // false = pause
-                                } else {
-                                    pause()
-                                }
-                            } else {
-                                // Check for override listener
-                                if (onPlayPauseListener != null) {
-                                    onPlayPauseListener!!(true) // true = play
-                                } else {
-                                    // Use built-in play with restart logic
-                                    play()
+                        // Only enable scrubbing when video is paused and not zoomed
+                        if (!isPlaying && !zoomContainer.isZoomed()) {
+                            holdCheckRunnable = Runnable {
+                                if (!isScrubbing && !isPlaying && !zoomContainer.isZoomed()) {
+                                    startScrubbing()
                                 }
                             }
+                            mainHandler.postDelayed(holdCheckRunnable!!, holdDuration)
                         }
-                        true // Consume the event to prevent it from being handled elsewhere
+                        
+                        true // Consume the event
                     }
+                    
+                    MotionEvent.ACTION_MOVE -> {
+                        if (isScrubbing) {
+                            // Calculate seek position based on drag distance
+                            val deltaX = event.x - scrubStartX
+                            val deltaMs = (deltaX * scrubSensitivity).toInt()
+                            val newPosition = (scrubStartPosition + deltaMs).coerceIn(0, videoDuration.toInt())
+                            
+                            // Update scrub overlay
+                            val progress = newPosition.toFloat() / videoDuration.toFloat()
+                            scrubOverlay.updateScrubPosition(progress)
+                            updateScrubTimeDisplay(newPosition)
+                            
+                            // Perform the seek
+                            seekTo(newPosition)
+                            
+                            // Notify scrub listener if set (for video comparison sync)
+                            onScrubListener?.invoke(newPosition)
+                            
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                    
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        // Cancel hold check if not yet in scrub mode
+                        holdCheckRunnable?.let { mainHandler.removeCallbacks(it) }
+                        holdCheckRunnable = null
+                        
+                        if (isScrubbing) {
+                            // Exit scrub mode
+                            stopScrubbing()
+                            true
+                        } else {
+                            // If it was a quick tap, toggle play/pause
+                            val holdDuration = System.currentTimeMillis() - holdStartTime
+                            if (holdDuration < 200 && !zoomContainer.isZoomed()) { // Quick tap threshold
+                                if (isPlaying) {
+                                    // Check for override listener
+                                    if (onPlayPauseListener != null) {
+                                        onPlayPauseListener!!(false) // false = pause
+                                    } else {
+                                        pause()
+                                    }
+                                } else {
+                                    // Check for override listener
+                                    if (onPlayPauseListener != null) {
+                                        onPlayPauseListener!!(true) // true = play
+                                    } else {
+                                        // Use built-in play with restart logic
+                                        play()
+                                    }
+                                }
+                            }
+                            true
+                        }
+                    }
+                    
+                    else -> false
                 }
-                
-                else -> false
+            } else {
+                false // Let zoom container handle multi-touch
             }
         }
     }
