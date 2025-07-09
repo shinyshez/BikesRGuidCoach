@@ -58,11 +58,7 @@ class VideoPlayerView @JvmOverloads constructor(
     // Drawing toolbar elements
     private lateinit var drawingToolbar: LinearLayout
     private lateinit var penButton: ImageButton
-    private lateinit var highlighterButton: ImageButton
     private lateinit var arrowButton: ImageButton
-    private lateinit var circleButton: ImageButton
-    private lateinit var lineButton: ImageButton
-    private lateinit var eraserButton: ImageButton
     private lateinit var colorIndicator: View
     private lateinit var colorButton: ImageButton
     private lateinit var undoButton: ImageButton
@@ -145,11 +141,7 @@ class VideoPlayerView @JvmOverloads constructor(
         // Initialize drawing toolbar
         drawingToolbar = findViewById(R.id.drawingToolbar)
         penButton = findViewById(R.id.penButton)
-        highlighterButton = findViewById(R.id.highlighterButton)
         arrowButton = findViewById(R.id.arrowButton)
-        circleButton = findViewById(R.id.circleButton)
-        lineButton = findViewById(R.id.lineButton)
-        eraserButton = findViewById(R.id.eraserButton)
         colorIndicator = findViewById(R.id.colorIndicator)
         colorButton = findViewById(R.id.colorButton)
         undoButton = findViewById(R.id.undoButton)
@@ -432,11 +424,7 @@ class VideoPlayerView @JvmOverloads constructor(
     private fun setupDrawingControls() {
         // Tool selection buttons
         penButton.setOnClickListener { selectDrawingTool(DrawingOverlay.DrawingTool.PEN) }
-        highlighterButton.setOnClickListener { selectDrawingTool(DrawingOverlay.DrawingTool.HIGHLIGHTER) }
         arrowButton.setOnClickListener { selectDrawingTool(DrawingOverlay.DrawingTool.ARROW) }
-        circleButton.setOnClickListener { selectDrawingTool(DrawingOverlay.DrawingTool.CIRCLE) }
-        lineButton.setOnClickListener { selectDrawingTool(DrawingOverlay.DrawingTool.LINE) }
-        eraserButton.setOnClickListener { selectDrawingTool(DrawingOverlay.DrawingTool.ERASER) }
         
         // Color selection
         colorButton.setOnClickListener { showColorPicker() }
@@ -467,11 +455,8 @@ class VideoPlayerView @JvmOverloads constructor(
         resetDrawingButtonStates()
         when (tool) {
             DrawingOverlay.DrawingTool.PEN -> penButton.alpha = 1.0f
-            DrawingOverlay.DrawingTool.HIGHLIGHTER -> highlighterButton.alpha = 1.0f
             DrawingOverlay.DrawingTool.ARROW -> arrowButton.alpha = 1.0f
-            DrawingOverlay.DrawingTool.CIRCLE -> circleButton.alpha = 1.0f
-            DrawingOverlay.DrawingTool.LINE -> lineButton.alpha = 1.0f
-            DrawingOverlay.DrawingTool.ERASER -> eraserButton.alpha = 1.0f
+            else -> penButton.alpha = 1.0f // Default to pen for any other tool
         }
         
         Log.d(TAG, "Selected drawing tool: $tool")
@@ -479,11 +464,7 @@ class VideoPlayerView @JvmOverloads constructor(
     
     private fun resetDrawingButtonStates() {
         penButton.alpha = 0.6f
-        highlighterButton.alpha = 0.6f
         arrowButton.alpha = 0.6f
-        circleButton.alpha = 0.6f
-        lineButton.alpha = 0.6f
-        eraserButton.alpha = 0.6f
     }
     
     private fun showColorPicker() {

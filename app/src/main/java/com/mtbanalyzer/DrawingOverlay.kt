@@ -20,7 +20,7 @@ class DrawingOverlay @JvmOverloads constructor(
 
     // Drawing tools
     enum class DrawingTool {
-        PEN, HIGHLIGHTER, ARROW, CIRCLE, LINE, ERASER
+        PEN, ARROW
     }
 
     // Drawing path data
@@ -90,7 +90,8 @@ class DrawingOverlay @JvmOverloads constructor(
         visiblePaths.clear()
         // For now, show all paths. Later we can filter by timestamp
         visiblePaths.addAll(allPaths)
-        invalidate()
+        // Use post to ensure we're on the main thread and avoid any layout issues
+        post { invalidate() }
     }
 
     fun clearAllDrawings() {
@@ -104,7 +105,9 @@ class DrawingOverlay @JvmOverloads constructor(
         if (allPaths.isNotEmpty()) {
             allPaths.removeAt(allPaths.size - 1)
             updateVisiblePaths()
-            Log.d(TAG, "Last drawing undone")
+            Log.d(TAG, "Last drawing undone, remaining paths: ${allPaths.size}")
+        } else {
+            Log.d(TAG, "No drawings to undo")
         }
     }
 
@@ -150,11 +153,11 @@ class DrawingOverlay @JvmOverloads constructor(
         currentPaint = createPaint()
 
         when (currentTool) {
-            DrawingTool.PEN, DrawingTool.HIGHLIGHTER, DrawingTool.ERASER -> {
+            DrawingTool.PEN -> {
                 currentPath?.moveTo(x, y)
             }
-            DrawingTool.ARROW, DrawingTool.CIRCLE, DrawingTool.LINE -> {
-                // For shapes, we'll draw them on ACTION_UP
+            DrawingTool.ARROW -> {
+                // For arrow, we'll draw it on ACTION_UP
             }
         }
 
@@ -163,12 +166,12 @@ class DrawingOverlay @JvmOverloads constructor(
 
     private fun continueDrawing(x: Float, y: Float) {
         when (currentTool) {
-            DrawingTool.PEN, DrawingTool.HIGHLIGHTER, DrawingTool.ERASER -> {
+            DrawingTool.PEN -> {
                 currentPath?.quadTo(lastTouchX, lastTouchY, (x + lastTouchX) / 2, (y + lastTouchY) / 2)
                 invalidate()
             }
-            DrawingTool.ARROW, DrawingTool.CIRCLE, DrawingTool.LINE -> {
-                // For shapes, we redraw preview during move
+            DrawingTool.ARROW -> {
+                // For arrow, we redraw preview during move
                 invalidate()
             }
         }
@@ -179,18 +182,11 @@ class DrawingOverlay @JvmOverloads constructor(
 
     private fun finishDrawing(x: Float, y: Float) {
         when (currentTool) {
-            DrawingTool.PEN, DrawingTool.HIGHLIGHTER, DrawingTool.ERASER -> {
+            DrawingTool.PEN -> {
                 currentPath?.lineTo(x, y)
             }
             DrawingTool.ARROW -> {
                 drawArrow(currentPath!!, startTouchX, startTouchY, x, y)
-            }
-            DrawingTool.CIRCLE -> {
-                drawCircle(currentPath!!, startTouchX, startTouchY, x, y)
-            }
-            DrawingTool.LINE -> {
-                currentPath?.moveTo(startTouchX, startTouchY)
-                currentPath?.lineTo(x, y)
             }
         }
 
@@ -217,21 +213,7 @@ class DrawingOverlay @JvmOverloads constructor(
             strokeJoin = Paint.Join.ROUND
             strokeCap = Paint.Cap.ROUND
             isAntiAlias = true
-
-            when (currentTool) {
-                DrawingTool.HIGHLIGHTER -> {
-                    alpha = 128 // Semi-transparent
-                    strokeWidth = currentStrokeWidth * 2 // Wider for highlighter
-                }
-                DrawingTool.ERASER -> {
-                    // Eraser uses destination out blend mode
-                    xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
-                    strokeWidth = currentStrokeWidth * 1.5f
-                }
-                else -> {
-                    // Default settings for pen, arrow, circle, line
-                }
-            }
+            // All tools use the same basic paint settings
         }
     }
 
@@ -255,13 +237,6 @@ class DrawingOverlay @JvmOverloads constructor(
         path.lineTo(arrowX2, arrowY2)
     }
 
-    private fun drawCircle(path: Path, startX: Float, startY: Float, endX: Float, endY: Float) {
-        val centerX = (startX + endX) / 2
-        val centerY = (startY + endY) / 2
-        val radius = sqrt((endX - startX).pow(2) + (endY - startY).pow(2)) / 2
-
-        path.addCircle(centerX, centerY, radius, Path.Direction.CW)
-    }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
@@ -274,7 +249,7 @@ class DrawingOverlay @JvmOverloads constructor(
         // Draw current path being drawn
         if (isDrawing && currentPath != null && currentPaint != null) {
             when (currentTool) {
-                DrawingTool.PEN, DrawingTool.HIGHLIGHTER, DrawingTool.ERASER -> {
+                DrawingTool.PEN -> {
                     canvas.drawPath(currentPath!!, currentPaint!!)
                 }
                 DrawingTool.ARROW -> {
@@ -283,18 +258,6 @@ class DrawingOverlay @JvmOverloads constructor(
                     val previewPath = Path()
                     drawArrow(previewPath, startTouchX, startTouchY, lastTouchX, lastTouchY)
                     canvas.drawPath(previewPath, previewPaint)
-                }
-                DrawingTool.CIRCLE -> {
-                    val previewPaint = createPaint()
-                    previewPaint.alpha = 128 // Semi-transparent preview
-                    val previewPath = Path()
-                    drawCircle(previewPath, startTouchX, startTouchY, lastTouchX, lastTouchY)
-                    canvas.drawPath(previewPath, previewPaint)
-                }
-                DrawingTool.LINE -> {
-                    val previewPaint = createPaint()
-                    previewPaint.alpha = 128 // Semi-transparent preview
-                    canvas.drawLine(startTouchX, startTouchY, lastTouchX, lastTouchY, previewPaint)
                 }
             }
         }

@@ -184,16 +184,7 @@
             android:src="@android:drawable/ic_menu_edit"
             android:background="@drawable/button_circle_background"
             android:contentDescription="Pen"
-            android:layout_marginEnd="8dp" />
-
-        <ImageButton
-            android:id="@+id/highlighterButton"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:src="@android:drawable/ic_menu_edit"
-            android:background="@drawable/button_circle_background"
-            android:contentDescription="Highlighter"
-            android:layout_marginEnd="8dp" />
+            android:layout_marginEnd="16dp" />
 
         <ImageButton
             android:id="@+id/arrowButton"
@@ -202,33 +193,6 @@
             android:src="@android:drawable/ic_media_play"
             android:background="@drawable/button_circle_background"
             android:contentDescription="Arrow"
-            android:layout_marginEnd="8dp" />
-
-        <ImageButton
-            android:id="@+id/circleButton"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:src="@android:drawable/ic_menu_compass"
-            android:background="@drawable/button_circle_background"
-            android:contentDescription="Circle"
-            android:layout_marginEnd="8dp" />
-
-        <ImageButton
-            android:id="@+id/lineButton"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:src="@android:drawable/ic_menu_sort_by_size"
-            android:background="@drawable/button_circle_background"
-            android:contentDescription="Line"
-            android:layout_marginEnd="8dp" />
-
-        <ImageButton
-            android:id="@+id/eraserButton"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:src="@android:drawable/ic_menu_delete"
-            android:background="@drawable/button_circle_background"
-            android:contentDescription="Eraser"
             android:layout_marginEnd="16dp" />
 
         <View
