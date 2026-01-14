@@ -79,30 +79,64 @@ jobs:
             adb shell pm grant com.mtbanalyzer android.permission.WRITE_EXTERNAL_STORAGE || true
             adb shell pm grant com.mtbanalyzer android.permission.READ_EXTERNAL_STORAGE || true
 
-            # Wait for app to be fully installed
+            # Wait for permissions to apply
             sleep 2
+
+            # Get screen dimensions for coordinate calculations
+            SCREEN_SIZE=$(adb shell wm size | grep -oE '[0-9]+x[0-9]+' | tail -1)
+            SCREEN_WIDTH=$(echo $SCREEN_SIZE | cut -d'x' -f1)
+            SCREEN_HEIGHT=$(echo $SCREEN_SIZE | cut -d'x' -f2)
+            echo "Screen size: ${SCREEN_WIDTH}x${SCREEN_HEIGHT}"
+
+            # Calculate tap positions (bottom nav bar is typically at ~90% height)
+            NAV_Y=$((SCREEN_HEIGHT * 93 / 100))
+            GALLERY_X=$((SCREEN_WIDTH * 10 / 100))
+            SETTINGS_X=$((SCREEN_WIDTH * 90 / 100))
+            CENTER_X=$((SCREEN_WIDTH / 2))
+
+            echo "Nav Y: $NAV_Y, Gallery X: $GALLERY_X, Settings X: $SETTINGS_X"
 
             # Launch the app
             adb shell am start -n com.mtbanalyzer/.MainActivity
-
-            # Wait for app to fully load and camera to initialize
             sleep 8
 
-            # Capture main screen screenshot
+            # 1. Capture main recording screen
+            echo "Capturing main screen..."
             adb exec-out screencap -p > screenshots/01_main_screen.png
 
-            # Try to navigate to gallery (if button exists)
-            # Capture coordinates may need adjustment based on device
-            adb shell input tap 200 1800 || true
-            sleep 2
-            adb exec-out screencap -p > screenshots/02_gallery_or_main.png
+            # Dump UI hierarchy for debugging
+            adb shell uiautomator dump /sdcard/ui_dump.xml || true
+            adb pull /sdcard/ui_dump.xml screenshots/ui_hierarchy.xml || true
 
-            # Go back and try settings
-            adb shell input keyevent KEYCODE_BACK || true
-            sleep 1
-            adb shell input tap 900 1800 || true
+            # 2. Navigate to Gallery using calculated coordinates
+            echo "Tapping gallery at ($GALLERY_X, $NAV_Y)..."
+            adb shell input tap $GALLERY_X $NAV_Y
+            sleep 3
+            adb exec-out screencap -p > screenshots/02_gallery.png
+
+            # 3. Go back to main screen
+            adb shell input keyevent KEYCODE_BACK
             sleep 2
-            adb exec-out screencap -p > screenshots/03_settings_or_main.png
+
+            # 4. Navigate to Settings (gear icon on right side)
+            echo "Tapping settings at ($SETTINGS_X, $NAV_Y)..."
+            adb shell input tap $SETTINGS_X $NAV_Y
+            sleep 3
+            adb exec-out screencap -p > screenshots/03_settings.png
+
+            # 5. Go back and try the tools/wrench icon (second from right)
+            adb shell input keyevent KEYCODE_BACK
+            sleep 2
+            TOOLS_X=$((SCREEN_WIDTH * 70 / 100))
+            echo "Tapping tools at ($TOOLS_X, $NAV_Y)..."
+            adb shell input tap $TOOLS_X $NAV_Y
+            sleep 3
+            adb exec-out screencap -p > screenshots/04_tools.png
+
+            # 6. Return to main and capture final state
+            adb shell input keyevent KEYCODE_BACK
+            sleep 2
+            adb exec-out screencap -p > screenshots/05_main_final.png
 
             # List captured screenshots
             echo "Captured screenshots:"
