@@ -104,13 +104,18 @@ jobs:
             echo "Capturing main screen..."
             adb exec-out screencap -p > screenshots/01_main_screen.png
 
-            # Dump UI hierarchy for debugging
+            # Dump UI hierarchy for debugging and get button coordinates
             adb shell uiautomator dump /sdcard/ui_dump.xml || true
             adb pull /sdcard/ui_dump.xml screenshots/ui_hierarchy.xml || true
 
-            # 2. Navigate to Gallery using calculated coordinates
-            echo "Tapping gallery at ($GALLERY_X, $NAV_Y)..."
-            adb shell input tap $GALLERY_X $NAV_Y
+            # Parse button coordinates from UI hierarchy
+            # Gallery button bounds="[22,533][70,581]" -> center (46, 557)
+            # Settings button bounds="[190,533][238,581]" -> center (214, 557)
+            # Using exact coordinates from UI dump
+
+            # 2. Tap Gallery button (content-desc="Gallery")
+            echo "Tapping Gallery button..."
+            adb shell input tap 46 557
             sleep 3
             adb exec-out screencap -p > screenshots/02_gallery.png
 
@@ -118,22 +123,23 @@ jobs:
             adb shell input keyevent KEYCODE_BACK
             sleep 2
 
-            # 4. Navigate to Settings (gear icon on right side)
-            echo "Tapping settings at ($SETTINGS_X, $NAV_Y)..."
-            adb shell input tap $SETTINGS_X $NAV_Y
+            # 4. Tap Settings button (content-desc="Settings")
+            echo "Tapping Settings button..."
+            adb shell input tap 214 557
             sleep 3
             adb exec-out screencap -p > screenshots/03_settings.png
 
-            # 5. Go back and try the tools/wrench icon (second from right)
+            # 5. Go back to main
             adb shell input keyevent KEYCODE_BACK
             sleep 2
-            TOOLS_X=$((SCREEN_WIDTH * 70 / 100))
-            echo "Tapping tools at ($TOOLS_X, $NAV_Y)..."
-            adb shell input tap $TOOLS_X $NAV_Y
-            sleep 3
-            adb exec-out screencap -p > screenshots/04_tools.png
 
-            # 6. Return to main and capture final state
+            # 6. Tap Zoom Test button (content-desc="Zoom Test")
+            echo "Tapping Zoom Test button..."
+            adb shell input tap 274 557
+            sleep 3
+            adb exec-out screencap -p > screenshots/04_zoom.png
+
+            # 7. Return to main and capture final state
             adb shell input keyevent KEYCODE_BACK
             sleep 2
             adb exec-out screencap -p > screenshots/05_main_final.png
