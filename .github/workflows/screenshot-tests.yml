@@ -73,14 +73,20 @@ jobs:
             # Install the app
             adb install app/build/outputs/apk/debug/app-debug.apk
 
+            # Grant permissions before launching
+            adb shell pm grant com.mtbanalyzer android.permission.CAMERA
+            adb shell pm grant com.mtbanalyzer android.permission.RECORD_AUDIO
+            adb shell pm grant com.mtbanalyzer android.permission.WRITE_EXTERNAL_STORAGE || true
+            adb shell pm grant com.mtbanalyzer android.permission.READ_EXTERNAL_STORAGE || true
+
             # Wait for app to be fully installed
             sleep 2
 
             # Launch the app
             adb shell am start -n com.mtbanalyzer/.MainActivity
 
-            # Wait for app to fully load
-            sleep 5
+            # Wait for app to fully load and camera to initialize
+            sleep 8
 
             # Capture main screen screenshot
             adb exec-out screencap -p > screenshots/01_main_screen.png
