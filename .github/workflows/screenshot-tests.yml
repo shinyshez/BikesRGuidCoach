@@ -67,6 +67,9 @@ jobs:
             # Create screenshots directory
             mkdir -p screenshots
 
+            # Uninstall any existing version (ignore errors if not installed)
+            adb uninstall com.mtbanalyzer || true
+
             # Install the app
             adb install app/build/outputs/apk/debug/app-debug.apk
 
