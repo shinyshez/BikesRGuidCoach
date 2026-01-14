@@ -1,0 +1,136 @@
+name: Screenshot Tests
+
+on:
+  pull_request:
+    branches: [main, master, develop]
+  workflow_dispatch:
+    inputs:
+      capture_screenshots:
+        description: 'Capture app screenshots for visual verification'
+        required: false
+        default: 'true'
+        type: boolean
+
+jobs:
+  screenshot-capture:
+    name: Capture App Screenshots
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Enable KVM for hardware acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Gradle cache
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: AVD cache
+        uses: actions/cache@v4
+        id: avd-cache
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+          key: avd-api29-x86_64-screenshots-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            avd-api29-x86_64-screenshots-
+            avd-api29-x86_64-
+
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug
+
+      - name: Run Emulator and Capture Screenshots
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 29
+          arch: x86_64
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          disable-animations: true
+          script: |
+            # Create screenshots directory
+            mkdir -p screenshots
+
+            # Install the app
+            adb install app/build/outputs/apk/debug/app-debug.apk
+
+            # Wait for app to be fully installed
+            sleep 2
+
+            # Launch the app
+            adb shell am start -n com.mtbanalyzer/.MainActivity
+
+            # Wait for app to fully load
+            sleep 5
+
+            # Capture main screen screenshot
+            adb exec-out screencap -p > screenshots/01_main_screen.png
+
+            # Try to navigate to gallery (if button exists)
+            # Capture coordinates may need adjustment based on device
+            adb shell input tap 200 1800 || true
+            sleep 2
+            adb exec-out screencap -p > screenshots/02_gallery_or_main.png
+
+            # Go back and try settings
+            adb shell input keyevent KEYCODE_BACK || true
+            sleep 1
+            adb shell input tap 900 1800 || true
+            sleep 2
+            adb exec-out screencap -p > screenshots/03_settings_or_main.png
+
+            # List captured screenshots
+            echo "Captured screenshots:"
+            ls -la screenshots/
+
+      - name: Upload Screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-screenshots
+          path: screenshots/
+          retention-days: 14
+
+      - name: Comment Screenshots on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const runId = context.runId;
+
+            const body = `## Screenshot Verification
+
+            Screenshots have been captured for this PR.
+
+            **Download screenshots:** [View Artifacts](https://github.com/${owner}/${repo}/actions/runs/${runId})
+
+            To verify visual changes:
+            1. Click the link above
+            2. Download the \`app-screenshots\` artifact
+            3. Review the captured screens
+
+            ---
+            *Automated screenshot capture*`;
+
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: context.issue.number,
+              body
+            });

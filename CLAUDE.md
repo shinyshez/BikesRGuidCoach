@@ -127,3 +127,73 @@ The video gallery displays all recorded MTB videos with the following features:
 When enabled in settings:
 - **Volume Up**: Start/stop manual recording
 - **Volume Down**: Toggle auto-record on/off
+
+## CI/CD and Verification
+
+This project uses GitHub Actions for continuous integration. When working via Claude Code (web), you can verify your changes through the CI pipeline.
+
+### GitHub Actions Workflows
+
+| Workflow | Trigger | Purpose |
+|----------|---------|---------|
+| `android-build.yml` | PR, push to main | Build APKs, run lint |
+| `unit-tests.yml` | PR | Run unit tests |
+| `instrumented-tests.yml` | PR | Run tests on emulator |
+| `screenshot-tests.yml` | PR | Capture app screenshots |
+| `distribute-apk.yml` | Push to main | Create release with QR code |
+
+### Verifying Your Changes
+
+After creating a PR, check the CI status:
+
+```bash
+# Check all PR checks
+gh pr checks
+
+# Watch until all checks complete
+gh pr checks --watch
+
+# View specific workflow run
+gh run list --workflow=android-build.yml
+gh run view <run-id> --log
+```
+
+### Downloading Artifacts
+
+```bash
+# List recent workflow runs
+gh run list
+
+# Download APK from a run
+gh run download <run-id> -n app-debug
+
+# Download screenshots
+gh run download <run-id> -n app-screenshots
+
+# Download test results
+gh run download <run-id> -n unit-test-results
+```
+
+### Triggering Workflows Manually
+
+```bash
+# Trigger a new distribution build
+gh workflow run distribute-apk.yml
+
+# Trigger screenshot capture
+gh workflow run screenshot-tests.yml
+```
+
+### Reading Test Failures
+
+When tests fail:
+1. Check `gh pr checks` to see which workflow failed
+2. Use `gh run view <run-id> --log` to see detailed output
+3. Download test reports: `gh run download <run-id> -n unit-test-results`
+
+### Human Testing
+
+When changes are merged to main:
+1. The `distribute-apk.yml` workflow creates a GitHub Release
+2. Download the QR code artifact from the workflow run
+3. Scan the QR code on an Android device to download and install the APK
