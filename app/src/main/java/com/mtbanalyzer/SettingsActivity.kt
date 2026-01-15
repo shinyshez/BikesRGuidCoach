@@ -17,6 +17,7 @@ import androidx.preference.PreferenceCategory
 import androidx.preference.Preference
 import com.mtbanalyzer.detector.RiderDetectorManager
 import com.mtbanalyzer.detector.RiderDetector.ConfigType
+import com.mtbanalyzer.tuning.DetectionTuningActivity
 
 class SettingsActivity : AppCompatActivity() {
 
@@ -142,6 +143,11 @@ class SettingsActivity : AppCompatActivity() {
             
             findPreference<androidx.preference.Preference>("clear_cache")?.setOnPreferenceClickListener {
                 showClearVideosDialog()
+                true
+            }
+
+            findPreference<androidx.preference.Preference>("detection_tuning")?.setOnPreferenceClickListener {
+                startActivity(android.content.Intent(requireContext(), DetectionTuningActivity::class.java))
                 true
             }
         }

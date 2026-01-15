@@ -74,6 +74,13 @@
             android:configChanges="orientation|screenSize|keyboardHidden"
             android:screenOrientation="sensor" />
 
+        <activity
+            android:name=".tuning.DetectionTuningActivity"
+            android:exported="false"
+            android:parentActivityName=".SettingsActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:screenOrientation="sensor" />
+
     </application>
 
 </manifest>

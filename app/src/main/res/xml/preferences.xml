@@ -112,6 +112,11 @@
             android:summary="Show FPS, processing time, and latency metrics"
             android:defaultValue="false" />
 
+        <Preference
+            android:key="detection_tuning"
+            android:title="Detection Tuning"
+            android:summary="Test and tune detection algorithms using videos" />
+
     </PreferenceCategory>
 
     <PreferenceCategory android:title="Storage"
