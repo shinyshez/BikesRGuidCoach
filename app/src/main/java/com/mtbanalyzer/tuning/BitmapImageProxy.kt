@@ -101,6 +101,9 @@ class BitmapImageProxy(
         override fun getSensorToBufferTransformMatrix(): android.graphics.Matrix = android.graphics.Matrix()
         override fun getTagBundle(): androidx.camera.core.impl.TagBundle =
             androidx.camera.core.impl.TagBundle.emptyBundle()
+        override fun populateExifData(exifBuilder: androidx.camera.core.ExifInfo.Builder) {
+            // No EXIF data available for video frames
+        }
     }
 }
 
