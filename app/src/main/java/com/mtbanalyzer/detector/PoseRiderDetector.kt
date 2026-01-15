@@ -6,6 +6,7 @@ import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.pose.PoseDetector
 import com.mtbanalyzer.GraphicOverlay
 import com.mtbanalyzer.PoseGraphic
+import com.mtbanalyzer.tuning.BitmapProvider
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 
@@ -31,13 +32,19 @@ class PoseRiderDetector(
         if (!isDetectorEnabled()) {
             return DetectionResult(false, 0.0, "Detector disabled")
         }
-        
-        val mediaImage = imageProxy.image
-        if (mediaImage == null) {
-            return DetectionResult(false, 0.0, "No image data")
+
+        // Check if this is a video frame (BitmapProvider) or camera frame
+        val image = if (imageProxy is BitmapProvider) {
+            // Video frame - use bitmap directly
+            InputImage.fromBitmap(imageProxy.getBitmap(), imageProxy.imageInfo.rotationDegrees)
+        } else {
+            // Camera frame - use media image
+            val mediaImage = imageProxy.image
+            if (mediaImage == null) {
+                return DetectionResult(false, 0.0, "No image data")
+            }
+            InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
         }
-        
-        val image = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
         
         return suspendCancellableCoroutine { continuation ->
             poseDetector.process(image)

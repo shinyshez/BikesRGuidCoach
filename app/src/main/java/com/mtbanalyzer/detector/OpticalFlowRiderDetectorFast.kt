@@ -4,6 +4,7 @@ import android.graphics.*
 import android.util.Log
 import androidx.camera.core.ImageProxy
 import com.mtbanalyzer.GraphicOverlay
+import com.mtbanalyzer.tuning.BitmapProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.math.*
@@ -68,7 +69,13 @@ class OpticalFlowRiderDetectorFast : RiderDetector() {
                 val originalHeight = if (isRotated) imageProxy.width else imageProxy.height
                 
                 val convertStartTime = System.currentTimeMillis()
-                val currentFrame = imageProxyToIntArray(imageProxy)
+                val currentFrame = if (imageProxy is BitmapProvider) {
+                    // Video frame - convert bitmap to int array
+                    bitmapToIntArray(imageProxy.getBitmap())
+                } else {
+                    // Camera frame - extract from YUV
+                    imageProxyToIntArray(imageProxy)
+                }
                 val convertTime = System.currentTimeMillis() - convertStartTime
                 
                 Log.d(TAG, "Fast conversion: ${convertTime}ms, size: ${frameWidth}x${frameHeight}")
@@ -386,10 +393,46 @@ class OpticalFlowRiderDetectorFast : RiderDetector() {
         }
         
         Log.d(TAG, "Fast downscale: ${width}x${height} -> ${targetWidth}x${targetHeight}")
-        
+
         return result
     }
-    
+
+    /**
+     * Convert Bitmap to grayscale IntArray for optical flow processing
+     */
+    private fun bitmapToIntArray(bitmap: Bitmap): IntArray {
+        val width = bitmap.width
+        val height = bitmap.height
+
+        // Downscale to fixed size for consistent performance
+        val targetWidth = 160
+        val targetHeight = 120
+        frameWidth = targetWidth
+        frameHeight = targetHeight
+
+        val result = IntArray(targetWidth * targetHeight)
+        val scaleX = width.toFloat() / targetWidth
+        val scaleY = height.toFloat() / targetHeight
+
+        var offset = 0
+        for (y in 0 until targetHeight) {
+            for (x in 0 until targetWidth) {
+                val srcX = (x * scaleX).toInt().coerceIn(0, width - 1)
+                val srcY = (y * scaleY).toInt().coerceIn(0, height - 1)
+                val pixel = bitmap.getPixel(srcX, srcY)
+                // Convert to grayscale
+                val r = (pixel shr 16) and 0xFF
+                val g = (pixel shr 8) and 0xFF
+                val b = pixel and 0xFF
+                result[offset++] = (0.299 * r + 0.587 * g + 0.114 * b).toInt()
+            }
+        }
+
+        Log.d(TAG, "Bitmap conversion: ${width}x${height} -> ${targetWidth}x${targetHeight}")
+
+        return result
+    }
+
     override fun getDisplayName(): String = "Fast Optical Flow Detection"
     
     override fun getDescription(): String = 

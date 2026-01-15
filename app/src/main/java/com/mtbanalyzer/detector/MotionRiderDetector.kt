@@ -4,6 +4,7 @@ import android.graphics.*
 import android.util.Log
 import androidx.camera.core.ImageProxy
 import com.mtbanalyzer.GraphicOverlay
+import com.mtbanalyzer.tuning.BitmapProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
@@ -48,7 +49,16 @@ class MotionRiderDetector : RiderDetector() {
                 Log.d(TAG, "ImageProxy: ${imageProxy.width}x${imageProxy.height}, rotation: $rotationDegrees, isRotated: $isRotated")
                 Log.d(TAG, "Using dimensions: ${originalWidth}x${originalHeight}")
                 
-                val currentFrame = imageProxyToBitmap(imageProxy)
+                val currentFrame = if (imageProxy is BitmapProvider) {
+                    // Video frame - get bitmap directly and scale it
+                    val bitmap = imageProxy.getBitmap()
+                    val scaledWidth = bitmap.width / 4
+                    val scaledHeight = bitmap.height / 4
+                    Bitmap.createScaledBitmap(bitmap, scaledWidth, scaledHeight, true)
+                } else {
+                    // Camera frame - extract from YUV
+                    imageProxyToBitmap(imageProxy)
+                }
                 val result = if (previousFrame != null) {
                     detectMotion(previousFrame!!, currentFrame, graphicOverlay, originalWidth, originalHeight)
                 } else {

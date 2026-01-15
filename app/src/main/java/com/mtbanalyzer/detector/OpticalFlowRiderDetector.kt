@@ -4,6 +4,7 @@ import android.graphics.*
 import android.util.Log
 import androidx.camera.core.ImageProxy
 import com.mtbanalyzer.GraphicOverlay
+import com.mtbanalyzer.tuning.BitmapProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.math.*
@@ -67,7 +68,13 @@ class OpticalFlowRiderDetector : RiderDetector() {
                 val originalHeight = if (isRotated) imageProxy.width else imageProxy.height
                 
                 val bitmapStartTime = System.currentTimeMillis()
-                val currentFrame = imageProxyToGrayscaleBitmap(imageProxy)
+                val currentFrame = if (imageProxy is BitmapProvider) {
+                    // Video frame - convert to grayscale bitmap
+                    bitmapToGrayscaleBitmap(imageProxy.getBitmap())
+                } else {
+                    // Camera frame - extract from YUV
+                    imageProxyToGrayscaleBitmap(imageProxy)
+                }
                 val bitmapTime = System.currentTimeMillis() - bitmapStartTime
                 
                 // Calculate scale factor from original image to processed image
@@ -404,7 +411,43 @@ class OpticalFlowRiderDetector : RiderDetector() {
             bitmap.recycle()
         }
     }
-    
+
+    /**
+     * Convert a color Bitmap to grayscale for optical flow processing
+     */
+    private fun bitmapToGrayscaleBitmap(sourceBitmap: Bitmap): Bitmap {
+        val width = sourceBitmap.width
+        val height = sourceBitmap.height
+
+        // Create grayscale bitmap
+        val pixels = IntArray(width * height)
+        sourceBitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+
+        for (i in pixels.indices) {
+            val pixel = pixels[i]
+            val r = (pixel shr 16) and 0xFF
+            val g = (pixel shr 8) and 0xFF
+            val b = pixel and 0xFF
+            val gray = (0.299 * r + 0.587 * g + 0.114 * b).toInt()
+            pixels[i] = Color.rgb(gray, gray, gray)
+        }
+
+        val grayBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        grayBitmap.setPixels(pixels, 0, width, 0, 0, width, height)
+
+        // Downscale for performance
+        val maxDimension = 320
+        val scale = minOf(maxDimension.toFloat() / width, maxDimension.toFloat() / height)
+        val scaledWidth = (width * scale).toInt()
+        val scaledHeight = (height * scale).toInt()
+
+        Log.d(TAG, "Bitmap grayscale: ${width}x${height} -> ${scaledWidth}x${scaledHeight}")
+
+        return Bitmap.createScaledBitmap(grayBitmap, scaledWidth, scaledHeight, true).also {
+            grayBitmap.recycle()
+        }
+    }
+
     private fun toGrayscale(pixel: Int): Int {
         val r = Color.red(pixel)
         val g = Color.green(pixel)
