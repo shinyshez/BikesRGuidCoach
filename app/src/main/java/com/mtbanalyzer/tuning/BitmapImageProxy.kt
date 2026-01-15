@@ -1,5 +1,6 @@
 package com.mtbanalyzer.tuning
 
+import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.graphics.Rect
 import androidx.camera.core.ImageInfo
@@ -90,8 +91,11 @@ class BitmapImageProxy(
     }
 
     /**
-     * ImageInfo implementation for bitmap-based frames
+     * ImageInfo implementation for bitmap-based frames.
+     * Note: We suppress RestrictedApi warnings because we need to implement the full
+     * ImageInfo interface to wrap video frames as ImageProxy for detector compatibility.
      */
+    @SuppressLint("RestrictedApi")
     private class BitmapImageInfo(
         private val timestampNs: Long,
         private val rotation: Int
