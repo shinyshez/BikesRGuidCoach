@@ -27,7 +27,7 @@
             android:background="?attr/selectableItemBackgroundBorderless"
             android:src="@drawable/ic_folder"
             android:contentDescription="Load Video"
-            android:tint="@android:color/white"
+            app:tint="@android:color/white"
             android:padding="12dp" />
 
     </com.google.android.material.appbar.MaterialToolbar>
@@ -145,7 +145,7 @@
                         android:background="?attr/selectableItemBackgroundBorderless"
                         android:src="@drawable/ic_skip_previous"
                         android:contentDescription="Previous Frame"
-                        android:tint="@android:color/white" />
+                        app:tint="@android:color/white" />
 
                     <!-- Play/Pause -->
                     <ImageButton
@@ -156,7 +156,7 @@
                         android:background="@drawable/circular_button_background"
                         android:src="@drawable/ic_play"
                         android:contentDescription="Play/Pause"
-                        android:tint="@android:color/white"
+                        app:tint="@android:color/white"
                         android:padding="12dp" />
 
                     <!-- Frame Step Forward -->
@@ -167,7 +167,7 @@
                         android:background="?attr/selectableItemBackgroundBorderless"
                         android:src="@drawable/ic_skip_next"
                         android:contentDescription="Next Frame"
-                        android:tint="@android:color/white" />
+                        app:tint="@android:color/white" />
 
                     <View
                         android:layout_width="0dp"
