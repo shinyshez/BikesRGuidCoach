@@ -50,6 +50,8 @@ class BitmapImageProxy(
     }
 
     @Suppress("DEPRECATION")
+    @SuppressLint("UnsafeOptInUsageError")
+    @androidx.camera.core.ExperimentalGetImage
     override fun getImage(): android.media.Image? {
         // Return null - callers should check for BitmapProvider first
         return null
