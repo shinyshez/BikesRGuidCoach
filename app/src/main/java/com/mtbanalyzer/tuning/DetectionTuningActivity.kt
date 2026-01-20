@@ -23,7 +23,6 @@ import com.google.mlkit.vision.pose.PoseDetection
 import com.google.mlkit.vision.pose.defaults.PoseDetectorOptions
 import com.mtbanalyzer.GraphicOverlay
 import com.mtbanalyzer.R
-import com.mtbanalyzer.SettingsManager
 import com.mtbanalyzer.detector.RiderDetector
 import com.mtbanalyzer.detector.RiderDetector.ConfigType
 import com.mtbanalyzer.detector.RiderDetectorManager
@@ -105,18 +104,24 @@ class DetectionTuningActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_detection_tuning)
+        try {
+            setContentView(R.layout.activity_detection_tuning)
 
-        initializeViews()
-        setupToolbar()
-        setupDetectorSpinner()
-        setupPlaybackControls()
-        setupActionButtons()
+            initializeViews()
+            setupToolbar()
+            setupDetectorSpinner()
+            setupPlaybackControls()
+            setupActionButtons()
 
-        frameExtractor = VideoFrameExtractor(this)
+            frameExtractor = VideoFrameExtractor(this)
 
-        // Initialize with default detector
-        switchDetector(RiderDetectorManager.DETECTOR_POSE)
+            // Initialize with default detector (delayed to avoid crash on startup)
+            // switchDetector will be called when spinner selection fires
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in onCreate", e)
+            Toast.makeText(this, "Error initializing: ${e.message}", Toast.LENGTH_LONG).show()
+            finish()
+        }
     }
 
     private fun initializeViews() {
@@ -306,46 +311,53 @@ class DetectionTuningActivity : AppCompatActivity() {
     private fun switchDetector(detectorType: String) {
         Log.d(TAG, "Switching to detector: $detectorType")
 
-        // Release current detector
-        currentDetector?.release()
+        try {
+            // Release current detector
+            currentDetector?.release()
 
-        // Create new detector
-        currentDetector = when (detectorType) {
-            RiderDetectorManager.DETECTOR_POSE -> {
-                val options = PoseDetectorOptions.Builder()
-                    .setDetectorMode(PoseDetectorOptions.SINGLE_IMAGE_MODE)
-                    .build()
-                val poseDetector = PoseDetection.getClient(options)
-                PoseRiderDetector(poseDetector)
+            // Create new detector
+            currentDetector = when (detectorType) {
+                RiderDetectorManager.DETECTOR_POSE -> {
+                    val options = PoseDetectorOptions.Builder()
+                        .setDetectorMode(PoseDetectorOptions.SINGLE_IMAGE_MODE)
+                        .build()
+                    val poseDetector = PoseDetection.getClient(options)
+                    PoseRiderDetector(poseDetector)
+                }
+                RiderDetectorManager.DETECTOR_MOTION -> MotionRiderDetector()
+                RiderDetectorManager.DETECTOR_OPTICAL_FLOW -> OpticalFlowRiderDetectorFast()
+                RiderDetectorManager.DETECTOR_HYBRID -> {
+                    val options = PoseDetectorOptions.Builder()
+                        .setDetectorMode(PoseDetectorOptions.SINGLE_IMAGE_MODE)
+                        .build()
+                    val poseDetector = PoseDetection.getClient(options)
+                    val poseRiderDetector = PoseRiderDetector(poseDetector)
+                    val motionRiderDetector = MotionRiderDetector()
+                    HybridRiderDetector(poseRiderDetector, motionRiderDetector)
+                }
+                else -> {
+                    val options = PoseDetectorOptions.Builder()
+                        .setDetectorMode(PoseDetectorOptions.SINGLE_IMAGE_MODE)
+                        .build()
+                    val poseDetector = PoseDetection.getClient(options)
+                    PoseRiderDetector(poseDetector)
+                }
             }
-            RiderDetectorManager.DETECTOR_MOTION -> MotionRiderDetector()
-            RiderDetectorManager.DETECTOR_OPTICAL_FLOW -> OpticalFlowRiderDetectorFast()
-            RiderDetectorManager.DETECTOR_HYBRID -> {
-                val options = PoseDetectorOptions.Builder()
-                    .setDetectorMode(PoseDetectorOptions.SINGLE_IMAGE_MODE)
-                    .build()
-                val poseDetector = PoseDetection.getClient(options)
-                val poseRiderDetector = PoseRiderDetector(poseDetector)
-                val motionRiderDetector = MotionRiderDetector()
-                HybridRiderDetector(poseRiderDetector, motionRiderDetector)
+
+            // Update UI
+            detectorDescription.text = currentDetector?.getDescription() ?: ""
+
+            // Generate parameter controls
+            generateParameterControls()
+
+            // Process current frame with new detector (only if video loaded)
+            if (videoUri != null) {
+                processCurrentFrame()
             }
-            else -> {
-                val options = PoseDetectorOptions.Builder()
-                    .setDetectorMode(PoseDetectorOptions.SINGLE_IMAGE_MODE)
-                    .build()
-                val poseDetector = PoseDetection.getClient(options)
-                PoseRiderDetector(poseDetector)
-            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error switching detector to $detectorType", e)
+            Toast.makeText(this, "Error initializing detector: ${e.message}", Toast.LENGTH_SHORT).show()
         }
-
-        // Update UI
-        detectorDescription.text = currentDetector?.getDescription() ?: ""
-
-        // Generate parameter controls
-        generateParameterControls()
-
-        // Process current frame with new detector
-        processCurrentFrame()
     }
 
     private fun generateParameterControls() {

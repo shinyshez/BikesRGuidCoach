@@ -144,6 +144,37 @@ jobs:
             sleep 2
             adb exec-out screencap -p > screenshots/05_main_final.png
 
+            # 8. Navigate to Settings -> Detection Tuning
+            echo "Navigating to Detection Tuning..."
+            adb shell input tap 214 557
+            sleep 3
+
+            # Scroll down to Developer section and tap Detection Tuning
+            # First scroll down in settings
+            adb shell input swipe 540 1500 540 500 500
+            sleep 1
+            adb shell input swipe 540 1500 540 500 500
+            sleep 1
+
+            # Dump UI to find Detection Tuning button
+            adb shell uiautomator dump /sdcard/settings_ui.xml || true
+            adb pull /sdcard/settings_ui.xml screenshots/settings_ui_hierarchy.xml || true
+
+            # Capture settings scrolled state
+            adb exec-out screencap -p > screenshots/06_settings_developer.png
+
+            # Try to tap Detection Tuning (search for text in UI dump and tap it)
+            # Using adb shell to find and tap the preference
+            adb shell "am start -n com.mtbanalyzer/.tuning.DetectionTuningActivity" || true
+            sleep 5
+
+            # Capture Detection Tuning screen (or error state)
+            adb exec-out screencap -p > screenshots/07_detection_tuning.png
+
+            # Capture logcat for any crashes
+            adb logcat -d -t 100 '*:E' > screenshots/logcat_errors.txt || true
+            adb logcat -d -t 50 DetectionTuning:* ActivityManager:* AndroidRuntime:* > screenshots/logcat_activity.txt || true
+
             # List captured screenshots
             echo "Captured screenshots:"
             ls -la screenshots/
