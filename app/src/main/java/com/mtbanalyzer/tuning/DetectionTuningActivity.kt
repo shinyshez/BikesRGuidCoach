@@ -699,6 +699,8 @@ class DetectionTuningActivity : AppCompatActivity() {
         seekBarUpdateRunnable?.let { mainHandler.removeCallbacks(it) }
         exoPlayer?.release()
         currentDetector?.release()
-        frameExtractor.release()
+        if (::frameExtractor.isInitialized) {
+            frameExtractor.release()
+        }
     }
 }
