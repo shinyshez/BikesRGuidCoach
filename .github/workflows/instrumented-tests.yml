@@ -63,18 +63,15 @@ jobs:
 
       - name: Run Instrumented Tests
         uses: reactivecircus/android-emulator-runner@v2
+        env:
+          TEST_CLASS: ${{ github.event.inputs.test_class }}
         with:
           api-level: 29
           arch: x86_64
           force-avd-creation: false
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
-          script: |
-            if [ -n "${{ github.event.inputs.test_class }}" ]; then
-              ./gradlew connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=${{ github.event.inputs.test_class }}
-            else
-              ./gradlew connectedDebugAndroidTest
-            fi
+          script: ./gradlew connectedDebugAndroidTest ${TEST_CLASS:+-Pandroid.testInstrumentationRunnerArguments.class=$TEST_CLASS}
 
       - name: Upload Test Results
         uses: actions/upload-artifact@v4
