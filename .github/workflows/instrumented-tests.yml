@@ -3,6 +3,13 @@ name: Instrumented Tests
 on:
   pull_request:
     branches: [main, master, develop]
+  workflow_dispatch:
+    inputs:
+      test_class:
+        description: 'Specific test class to run (leave empty for all)'
+        required: false
+        default: ''
+        type: string
 
 jobs:
   instrumented-test:
@@ -62,7 +69,12 @@ jobs:
           force-avd-creation: false
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
-          script: ./gradlew connectedDebugAndroidTest
+          script: |
+            if [ -n "${{ github.event.inputs.test_class }}" ]; then
+              ./gradlew connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=${{ github.event.inputs.test_class }}
+            else
+              ./gradlew connectedDebugAndroidTest
+            fi
 
       - name: Upload Test Results
         uses: actions/upload-artifact@v4
