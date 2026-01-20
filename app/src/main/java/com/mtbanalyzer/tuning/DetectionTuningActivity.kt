@@ -170,13 +170,16 @@ class DetectionTuningActivity : AppCompatActivity() {
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         detectorSpinner.adapter = adapter
 
-        detectorSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                val detectorType = detectorTypes[position].first
-                switchDetector(detectorType)
-            }
+        // Set listener after a short delay to avoid immediate initialization issues
+        detectorSpinner.post {
+            detectorSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                    val detectorType = detectorTypes[position].first
+                    switchDetector(detectorType)
+                }
 
-            override fun onNothingSelected(parent: AdapterView<*>?) {}
+                override fun onNothingSelected(parent: AdapterView<*>?) {}
+            }
         }
     }
 

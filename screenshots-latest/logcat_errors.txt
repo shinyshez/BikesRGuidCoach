@@ -1,0 +1,8 @@
+--------- beginning of system
+--------- beginning of main
+01-20 11:37:06.648  1919  1944 E memtrack: Couldn't load memtrack module
+01-20 11:37:06.663  1919  1944 E memtrack: Couldn't load memtrack module
+01-20 11:37:06.667  1919  1944 E memtrack: Couldn't load memtrack module
+01-20 11:37:07.338  3917  3917 E libc    : Access denied finding property "persist.device_config.runtime_native_boot.enable_apex_image"
+01-20 11:37:07.338  3917  3917 E libc    : Access denied finding property "persist.device_config.runtime_native_boot.disable_lock_profiling"
+01-20 11:37:07.338  3917  3917 E libc    : Access denied finding property "persist.device_config.runtime_native_boot.enable_generational_cc"

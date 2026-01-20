@@ -1,0 +1,52 @@
+--------- beginning of main
+01-20 11:37:07.324  3917  3917 W app_process: type=1400 audit(0.0:77): avc: denied { read } for name="u:object_r:device_config_runtime_native_boot_prop:s0" dev="tmpfs" ino=743 scontext=u:r:shell:s0 tcontext=u:object_r:device_config_runtime_native_boot_prop:s0 tclass=file permissive=0
+01-20 11:37:07.338  3917  3917 E libc    : Access denied finding property "persist.device_config.runtime_native_boot.enable_generational_cc"
+01-20 11:37:07.339  3917  3917 I app_process: Core platform API reporting enabled, enforcing=false
+01-20 11:37:07.369  3917  3917 D ICU     : Time zone APEX file found: /apex/com.android.tzdata/etc/icu/icu_tzdata.dat
+01-20 11:37:07.372  3917  3917 W app_process: Unexpected CPU variant for X86 using defaults: x86_64
+01-20 11:37:07.374  3917  3917 I app_process: The ClassLoaderContext is a special shared library.
+01-20 11:37:07.374  3917  3917 I app_process: The ClassLoaderContext is a special shared library.
+01-20 11:37:07.381  3917  3917 W app_process: JNI RegisterNativeMethods: attempt to register 0 native methods for android.media.AudioAttributes
+01-20 11:37:07.384  3917  3917 D AndroidRuntime: Calling main entry com.android.commands.uiautomator.Launcher
+--------- beginning of system
+01-20 11:37:06.259  1919  2266 I chatty  : uid=1000(system) Binder:1919_7 expire 20 lines
+01-20 11:37:06.259  1919  2266 W InputManager: Input event injection from pid 3904 failed.
+01-20 11:37:07.388  1919  1919 V SettingsProvider: Notifying for 0: content://settings/secure/accessibility_enabled
+01-20 11:37:08.440  3917  3917 I AccessibilityNodeInfoDumper: Skipping invisible child: android.view.accessibility.AccessibilityNodeInfo@3979e; boundsInParent: Rect(0, 0 - 226, 35); boundsInScreen: Rect(16, 651 - 242, 640); packageName: com.mtbanalyzer; className: android.widget.TextView; text: Display detected pose landmarks on camera preview; error: null; maxTextLength: -1; contentDescription: null; tooltipText: null; viewIdResName: android:id/summary; checkable: false; checked: false; focusable: false; focused: false; selected: false; clickable: false; longClickable: false; contextClickable: false; enabled: true; password: false; scrollable: false; importantForAccessibility: true; visible: false; actions: [AccessibilityAction: ACTION_SELECT - null, AccessibilityAction: ACTION_CLEAR_SELECTION - null, AccessibilityAction: ACTION_ACCESSIBILITY_FOCUS - null, AccessibilityAction: ACTION_NEXT_AT_MOVEMENT_GRANULARITY - null, AccessibilityAction: ACTION_PREVIOUS_AT_MOVEMENT_GRANULARITY - null, AccessibilityAction: ACTION_SET_SELECTION - null, AccessibilityAction: ACTION_SHOW_ON_SCREEN - null]
+01-20 11:37:08.440  3917  3917 I AccessibilityNodeInfoDumper: Skipping invisible child: android.view.accessibility.AccessibilityNodeInfo@39f20; boundsInParent: Rect(0, 0 - 46, 27); boundsInScreen: Rect(258, 644 - 304, 640); packageName: com.mtbanalyzer; className: android.widget.Switch; text: ON; error: null; maxTextLength: -1; contentDescription: null; tooltipText: null; viewIdResName: com.mtbanalyzer:id/switchWidget; checkable: true; checked: true; focusable: false; focused: false; selected: false; clickable: false; longClickable: false; contextClickable: false; enabled: true; password: false; scrollable: false; importantForAccessibility: true; visible: false; actions: [AccessibilityAction: ACTION_SELECT - null, AccessibilityAction: ACTION_CLEAR_SELECTION - null, AccessibilityAction: ACTION_ACCESSIBILITY_FOCUS - null, AccessibilityAction: ACTION_SHOW_ON_SCREEN - null]
+01-20 11:37:08.441  3917  3917 W AccessibilityNodeInfoDumper: Fetch time: 8ms
+01-20 11:37:08.442  1919  1935 W WindowManager: removeWindowToken: Attempted to remove non-existing token: android.os.Binder@e5c7782
+01-20 11:37:08.443  1919  1919 V SettingsProvider: Notifying for 0: content://settings/secure/accessibility_enabled
+01-20 11:37:08.447  3917  3917 D AndroidRuntime: Shutting down VM
+01-20 11:37:08.516  1697  1843 D gralloc_ranchu: gralloc_alloc: Creating ashmem region of size 823296
+01-20 11:37:08.519  1567  1567 I hwservicemanager: getTransport: Cannot find entry android.hardware.graphics.mapper@3.0::IMapper/default in either framework or device manifest.
+01-20 11:37:08.519  3935  3935 W Gralloc3: mapper 3.x is not supported
+01-20 11:37:08.523  3935  3935 D HostConnection: createUnique: call
+01-20 11:37:08.523  3935  3935 D HostConnection: HostConnection::get() New Host Connection established 0x737b21eb85a0, tid 3935
+01-20 11:37:08.525  3935  3935 D HostConnection: HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_vulkan ANDROID_EMU_deferred_vulkan_commands ANDROID_EMU_vulkan_create_resources_with_requirements ANDROID_EMU_vulkan_free_memory_sync ANDROID_EMU_vulkan_shader_float16_int8 ANDROID_EMU_vulkan_async_queue_submit ANDROID_EMU_sync_buffer_data ANDROID_EMU_vulkan_async_qsri ANDROID_EMU_hwc_color_transform GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object GL_KHR_texture_compression_astc_ldr ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_0 
+01-20 11:37:08.526  3935  3935 D eglCodecCommon: allocate: Ask for block of size 0x1000
+01-20 11:37:08.526  3935  3935 D eglCodecCommon: allocate: ioctl allocate returned offset 0x3fff24000 size 0x2000
+01-20 11:37:08.528  3935  3935 D eglCodecCommon: allocate: Ask for block of size 0xc9000
+01-20 11:37:08.528  3935  3935 D eglCodecCommon: allocate: ioctl allocate returned offset 0x3ffe5c000 size 0xca000
+01-20 11:37:08.569  1919  1935 I ActivityTaskManager: START u0 {flg=0x10000000 cmp=com.mtbanalyzer/.tuning.DetectionTuningActivity} from uid 2000
+01-20 11:37:08.569  1919  1935 W ActivityTaskManager: Permission Denial: starting Intent { flg=0x10000000 cmp=com.mtbanalyzer/.tuning.DetectionTuningActivity } from null (pid=3939, uid=2000) not exported from uid 10117
+01-20 11:37:09.938  3097  3419 I Dialer  : OmtpVvmCarrierCfgHlpr - OmtpEvent:CONFIG_STATUS_SMS_TIME_OUT
+01-20 11:37:09.938  3097  3097 I Dialer  : RetryPolicy - discarding deferred status: configuration_state=4
+01-20 11:37:09.940  3097  3097 I Dialer  : VvmTaskExecutor - no more tasks, stopping service if no task are added in 5000 millis
+01-20 11:37:09.940  3097  3097 I Dialer  : VvmTaskReceiver - task received
+01-20 11:37:09.940  3097  3097 I Dialer  : VvmTaskReceiver - TaskExecutor already running
+01-20 11:37:09.940  3097  3097 I Dialer  : Task.createTask - create task:com.android.voicemail.impl.ActivationTask
+01-20 11:37:09.940  3097  3097 I Dialer  : RetryPolicy - retry #1 for com.android.voicemail.impl.ActivationTask@daadd7d queued, executing in 5000
+01-20 11:37:09.941  3097  3097 I Dialer  : VvmTaskExecutor - com.android.voicemail.impl.ActivationTask@daadd7d added
+01-20 11:37:09.941  3097  3097 I Dialer  : VvmTaskExecutor - minimal wait time:5000
+01-20 11:37:09.941  3097  3097 I Dialer  : VvmTaskExecutor - sleep for 5000 millis
+01-20 11:37:13.618  1697  1843 D gralloc_ranchu: gralloc_alloc: Creating ashmem region of size 823296
+01-20 11:37:13.620  1567  1567 I hwservicemanager: getTransport: Cannot find entry android.hardware.graphics.mapper@3.0::IMapper/default in either framework or device manifest.
+01-20 11:37:13.621  3944  3944 W Gralloc3: mapper 3.x is not supported
+01-20 11:37:13.625  3944  3944 D HostConnection: createUnique: call
+01-20 11:37:13.625  3944  3944 D HostConnection: HostConnection::get() New Host Connection established 0x7c37671f75a0, tid 3944
+01-20 11:37:13.626  3944  3944 D HostConnection: HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_vulkan ANDROID_EMU_deferred_vulkan_commands ANDROID_EMU_vulkan_create_resources_with_requirements ANDROID_EMU_vulkan_free_memory_sync ANDROID_EMU_vulkan_shader_float16_int8 ANDROID_EMU_vulkan_async_queue_submit ANDROID_EMU_sync_buffer_data ANDROID_EMU_vulkan_async_qsri ANDROID_EMU_hwc_color_transform GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object GL_KHR_texture_compression_astc_ldr ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_0 
+01-20 11:37:13.627  3944  3944 D eglCodecCommon: allocate: Ask for block of size 0x1000
+01-20 11:37:13.627  3944  3944 D eglCodecCommon: allocate: ioctl allocate returned offset 0x3fff24000 size 0x2000
+01-20 11:37:13.629  3944  3944 D eglCodecCommon: allocate: Ask for block of size 0xc9000
+01-20 11:37:13.629  3944  3944 D eglCodecCommon: allocate: ioctl allocate returned offset 0x3ffe5c000 size 0xca000

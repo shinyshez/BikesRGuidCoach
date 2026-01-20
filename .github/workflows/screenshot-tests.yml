@@ -149,11 +149,15 @@ jobs:
             adb shell input tap 214 557
             sleep 3
 
-            # Scroll down to Developer section and tap Detection Tuning
-            # First scroll down in settings
-            adb shell input swipe 540 1500 540 500 500
+            # Scroll down to Developer section - need multiple swipes
+            echo "Scrolling to Developer section..."
+            adb shell input swipe 160 500 160 200 300
             sleep 1
-            adb shell input swipe 540 1500 540 500 500
+            adb shell input swipe 160 500 160 200 300
+            sleep 1
+            adb shell input swipe 160 500 160 200 300
+            sleep 1
+            adb shell input swipe 160 500 160 200 300
             sleep 1
 
             # Dump UI to find Detection Tuning button
@@ -163,17 +167,30 @@ jobs:
             # Capture settings scrolled state
             adb exec-out screencap -p > screenshots/06_settings_developer.png
 
-            # Try to tap Detection Tuning (search for text in UI dump and tap it)
-            # Using adb shell to find and tap the preference
-            adb shell "am start -n com.mtbanalyzer/.tuning.DetectionTuningActivity" || true
+            # Find and tap Detection Tuning by searching UI hierarchy
+            # Look for the Detection Tuning text and get its bounds
+            BOUNDS=$(grep -o 'text="Detection Tuning"[^>]*bounds="\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]"' screenshots/settings_ui_hierarchy.xml | grep -o '\[[0-9]*,[0-9]*\]' | head -1 | tr -d '[]')
+            if [ -n "$BOUNDS" ]; then
+              X=$(echo $BOUNDS | cut -d',' -f1)
+              Y=$(echo $BOUNDS | cut -d',' -f2)
+              # Add offset to center of the item
+              TAP_X=$((X + 100))
+              TAP_Y=$((Y + 20))
+              echo "Found Detection Tuning at bounds, tapping at $TAP_X, $TAP_Y"
+              adb shell input tap $TAP_X $TAP_Y
+            else
+              echo "Detection Tuning not found in UI, trying fixed position"
+              # Try tapping where Developer section items typically are
+              adb shell input tap 160 400
+            fi
             sleep 5
 
             # Capture Detection Tuning screen (or error state)
             adb exec-out screencap -p > screenshots/07_detection_tuning.png
 
             # Capture logcat for any crashes
-            adb logcat -d -t 100 '*:E' > screenshots/logcat_errors.txt || true
-            adb logcat -d -t 50 DetectionTuning:* ActivityManager:* AndroidRuntime:* > screenshots/logcat_activity.txt || true
+            adb logcat -d -t 200 '*:E' > screenshots/logcat_errors.txt || true
+            adb logcat -d -t 100 DetectionTuning:* ActivityManager:* AndroidRuntime:* > screenshots/logcat_activity.txt || true
 
             # List captured screenshots
             echo "Captured screenshots:"
