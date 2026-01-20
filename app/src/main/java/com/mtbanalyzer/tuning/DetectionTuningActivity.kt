@@ -104,21 +104,33 @@ class DetectionTuningActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Log.d(TAG, "onCreate starting")
         try {
             setContentView(R.layout.activity_detection_tuning)
+            Log.d(TAG, "setContentView complete")
 
             initializeViews()
+            Log.d(TAG, "initializeViews complete")
+
             setupToolbar()
+            Log.d(TAG, "setupToolbar complete")
+
             setupDetectorSpinner()
+            Log.d(TAG, "setupDetectorSpinner complete")
+
             setupPlaybackControls()
+            Log.d(TAG, "setupPlaybackControls complete")
+
             setupActionButtons()
+            Log.d(TAG, "setupActionButtons complete")
 
             frameExtractor = VideoFrameExtractor(this)
+            Log.d(TAG, "frameExtractor initialized")
 
-            // Initialize with default detector (delayed to avoid crash on startup)
-            // switchDetector will be called when spinner selection fires
+            Log.d(TAG, "onCreate complete")
         } catch (e: Exception) {
             Log.e(TAG, "Error in onCreate", e)
+            e.printStackTrace()
             Toast.makeText(this, "Error initializing: ${e.message}", Toast.LENGTH_LONG).show()
             finish()
         }
