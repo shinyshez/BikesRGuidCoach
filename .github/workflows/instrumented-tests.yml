@@ -71,7 +71,17 @@ jobs:
           force-avd-creation: false
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
-          script: adb uninstall com.mtbanalyzer || true; adb uninstall com.mtbanalyzer.test || true; ./gradlew connectedDebugAndroidTest ${TEST_CLASS:+-Pandroid.testInstrumentationRunnerArguments.class=$TEST_CLASS}
+          script: adb uninstall com.mtbanalyzer || true; adb uninstall com.mtbanalyzer.test || true; adb logcat -c; ./gradlew connectedDebugAndroidTest ${TEST_CLASS:+-Pandroid.testInstrumentationRunnerArguments.class=$TEST_CLASS} || true; adb logcat -d '*:E' > logcat_errors.txt; adb logcat -d DetectionTuning:* DETECTION_TUNING:* AndroidRuntime:* > logcat_app.txt
+
+      - name: Upload Logcat
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: logcat-output
+          path: |
+            logcat_errors.txt
+            logcat_app.txt
+          retention-days: 7
 
       - name: Upload Test Results
         uses: actions/upload-artifact@v4
