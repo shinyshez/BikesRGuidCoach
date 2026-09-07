@@ -27,10 +27,22 @@ gh workflow run screenshot-tests.yml
 
 ## What Screenshots Are Captured
 
-The workflow captures:
+The workflow runs `scripts/capture-screenshots.sh` on an API 29 emulator. It
+navigates by view `content-desc`/`text` (via `uiautomator dump`), not fixed
+coordinates, and captures:
+
 1. `01_main_screen.png` - Main recording screen
-2. `02_gallery_or_main.png` - Gallery view (if navigation successful)
-3. `03_settings_or_main.png` - Settings screen (if navigation successful)
+2. `02_gallery.png` - Gallery view
+3. `03_settings.png` - Settings screen
+4. `04_zoom.png` - Zoom test screen
+5. `05_main_final.png` - Main screen after returning
+6. `06_settings_developer.png` - Settings scrolled to the Developer section
+7. `07_detection_tuning.png` - Detection Tuning screen
+
+Alongside the PNGs: `ui_hierarchy.xml`, `settings_ui_hierarchy.xml`,
+`logcat_errors.txt` and `logcat_activity.txt` for debugging. To add a screen,
+edit the script and use `tap_by_attr content-desc "<label>"` or
+`tap_by_attr text "<label>"`.
 
 ## Review Process
 
