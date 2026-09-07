@@ -1,5 +1,19 @@
 # Get Screenshots
 
+## Local (seconds, not minutes)
+
+```bash
+source scripts/android-env.sh
+scripts/emulator.sh start
+./gradlew assembleDebug
+bash scripts/capture-screenshots.sh screenshots
+```
+
+Then open the PNGs in `./screenshots/` (use the Read tool on each) and check they show
+the intended screen — the script only asserts that each tap target existed.
+
+## CI
+
 Download and review app screenshots captured by CI for visual verification.
 
 ## Find Screenshot Runs

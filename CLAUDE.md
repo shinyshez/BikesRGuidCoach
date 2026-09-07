@@ -58,10 +58,31 @@ MTB Analyzer is an Android application that uses computer vision to automaticall
 ./gradlew check
 ```
 
+## Local Toolchain (fast loop)
+
+The Mac has JDK 17 (`brew install openjdk@17`) and the Android SDK
+(`brew install --cask android-commandlinetools`) at `/opt/homebrew/share/android-commandlinetools`,
+pointed to by the gitignored `local.properties`. Every shell needs the env first:
+
+```bash
+source scripts/android-env.sh          # JAVA_HOME, ANDROID_HOME, adb/emulator on PATH
+scripts/emulator.sh start              # boot headless AVD "mtb-test" (API 34 arm64), ~30s cold
+./gradlew assembleDebug                 # ~2 min first time, seconds after
+./gradlew connectedDebugAndroidTest     # Espresso tests on the emulator, ~30s
+bash scripts/capture-screenshots.sh     # drive every screen, PNGs + logcat in ./screenshots/
+scripts/emulator.sh stop
+```
+
+`scripts/emulator.sh create` (one-off) builds the AVD. The screenshot script is the
+same one CI runs; it finds views by `content-desc`/`text` via `uiautomator dump`
+(`tap_by_attr`, `scroll_to`) so it works at any screen size. Always open the PNGs to
+check them — a green exit only means the taps landed on *something*. Use CI (below)
+as the final check on a PR; the local loop is for iteration.
+
 ## Development Workflow
 
 ### Running the App
-1. Connect an Android device with API 24+ or start an emulator
+1. Connect an Android device with API 24+ or run `scripts/emulator.sh start`
 2. Run `./gradlew installDebug` to install the app
 3. Grant camera and audio recording permissions when prompted
 
