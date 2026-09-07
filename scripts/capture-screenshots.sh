@@ -47,6 +47,14 @@ scroll_to() {
     echo "ERROR: no node with ${attr}=\"${value}\" found on screen after $i scrolls" >&2
     return 1
   fi
+  # If the node has only just scrolled into view at the bottom edge, nudge once more so
+  # the tap can't land on the navigation bar.
+  # shellcheck disable=SC2086
+  set -- $bounds
+  if [ "$max_scrolls" -gt 0 ] && [ $(( ($2 + $4) / 2 )) -gt $(( SCREEN_H * 88 / 100 )) ]; then
+    swipe_up
+    bounds=$(find_bounds "$attr" "$value")
+  fi
   echo "$bounds"
 }
 
