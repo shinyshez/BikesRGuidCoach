@@ -4,6 +4,7 @@
 #   scripts/emulator.sh start    # boot headless and wait until ready
 #   scripts/emulator.sh stop
 #   scripts/emulator.sh status
+#   scripts/emulator.sh install  # installDebug + grant runtime permissions (connected tests uninstall the app)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 # shellcheck source=android-env.sh
@@ -37,5 +38,12 @@ case "${1:-status}" in
   status)
     adb devices
     ;;
-  *) echo "usage: $0 {create|start|stop|status}" >&2; exit 2 ;;
+  install)
+    ./gradlew installDebug --console=plain -q
+    for perm in CAMERA RECORD_AUDIO READ_MEDIA_VIDEO; do
+      adb shell pm grant com.mtbanalyzer "android.permission.$perm" 2>/dev/null || true
+    done
+    echo "Installed and granted permissions"
+    ;;
+  *) echo "usage: $0 {create|start|stop|status|install}" >&2; exit 2 ;;
 esac

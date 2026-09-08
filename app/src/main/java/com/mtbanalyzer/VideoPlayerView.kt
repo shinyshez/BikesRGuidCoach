@@ -50,17 +50,24 @@ class VideoPlayerView @JvmOverloads constructor(
     private lateinit var frameForwardButton: ImageButton
     private lateinit var frameBackwardButton: ImageButton
     private lateinit var seekBar: SeekBar
-    private lateinit var timeDisplay: TextView
-    private lateinit var poseToggleButton: Button
-    private lateinit var drawingToggleButton: Button
+    private lateinit var currentTimeText: TextView
+    private lateinit var totalTimeText: TextView
+    private lateinit var frameBadge: TextView
+    private lateinit var titleText: TextView
+    private lateinit var progressLine: ProgressBar
+    private lateinit var topBar: View
+    private lateinit var bottomControlsBar: View
+    private lateinit var doneDrawingButton: Button
+    private lateinit var poseToggleButton: ImageButton
+    private lateinit var drawingToggleButton: ImageButton
     private lateinit var loadingIndicator: ProgressBar
     
-    // Drawing toolbar elements
+    // Drawing rail elements
     private lateinit var drawingToolbar: LinearLayout
     private lateinit var penButton: ImageButton
     private lateinit var arrowButton: ImageButton
     private lateinit var colorIndicator: View
-    private lateinit var colorButton: ImageButton
+    private lateinit var colorButton: View
     private lateinit var undoButton: ImageButton
     private lateinit var clearButton: ImageButton
     
@@ -94,7 +101,6 @@ class VideoPlayerView @JvmOverloads constructor(
     private var onSeekListener: ((position: Int, fromUser: Boolean) -> Unit)? = null
     private var onFrameStepListener: ((forward: Boolean) -> Unit)? = null
     private var onScrubListener: ((position: Int) -> Unit)? = null
-    private var onPlayPauseListener: ((play: Boolean) -> Unit)? = null
     private var onVideoTapListener: (() -> Unit)? = null
     
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -111,6 +117,13 @@ class VideoPlayerView @JvmOverloads constructor(
     private var isDrawingMode = false
     private var currentDrawingTool = DrawingOverlay.DrawingTool.PEN
     private var currentDrawingColor = android.graphics.Color.RED
+    
+    // Controls visibility: hidden while playing, revealed by a tap, auto-hidden after a delay.
+    // Embedded mode (video comparison) has no bottom bar and never auto-hides.
+    private var controlsVisible = true
+    private var isEmbedded = false
+    private val hideControlsRunnable = Runnable { hideControls() }
+    private val controlsHideDelayMs = 3000L
     
     // Zoom is now handled by ZoomablePlayerContainer
     
@@ -133,7 +146,14 @@ class VideoPlayerView @JvmOverloads constructor(
         frameForwardButton = findViewById(R.id.frameForwardButton)
         frameBackwardButton = findViewById(R.id.frameBackwardButton)
         seekBar = findViewById(R.id.seekBar)
-        timeDisplay = findViewById(R.id.timeDisplay)
+        currentTimeText = findViewById(R.id.currentTimeText)
+        totalTimeText = findViewById(R.id.totalTimeText)
+        frameBadge = findViewById(R.id.frameBadge)
+        titleText = findViewById(R.id.titleText)
+        progressLine = findViewById(R.id.progressLine)
+        topBar = findViewById(R.id.topBar)
+        bottomControlsBar = findViewById(R.id.bottomControlsBar)
+        doneDrawingButton = findViewById(R.id.doneDrawingButton)
         poseToggleButton = findViewById(R.id.poseToggleButton)
         drawingToggleButton = findViewById(R.id.drawingToggleButton)
         loadingIndicator = findViewById(R.id.loadingIndicator)
@@ -172,11 +192,14 @@ class VideoPlayerView @JvmOverloads constructor(
                     Player.STATE_READY -> {
                         videoDuration = exoPlayer?.duration ?: 0L
                         seekBar.max = videoDuration.toInt()
+                        progressLine.max = videoDuration.toInt()
                         loadingIndicator.visibility = View.GONE
                         
                         // Extract metadata and initialize frame tracking
                         extractVideoMetadata()
                         currentFrameIndex = 0
+                        updateTimeDisplay(getCurrentPosition())
+                        updateFrameBadge()
                         
                         // Notify listener
                         onVideoLoadedListener?.invoke(videoDuration.toInt())
@@ -187,9 +210,12 @@ class VideoPlayerView @JvmOverloads constructor(
                         isPlaying = false
                         playPauseButton.setImageResource(android.R.drawable.ic_popup_sync) // Reload icon
                         stopPoseProcessing()
+                        updateFrameBadge()
+                        showControls()
                         onVideoCompletionListener?.invoke()
                     }
                     Player.STATE_BUFFERING -> {
+                        Log.d(TAG, "Video buffering at ${getCurrentPosition()}ms")
                         loadingIndicator.visibility = View.VISIBLE
                     }
                     Player.STATE_IDLE -> {
@@ -219,6 +245,13 @@ class VideoPlayerView @JvmOverloads constructor(
                     startPoseProcessing()
                 } else {
                     stopPoseProcessing()
+                }
+                
+                updateFrameBadge()
+                if (playing) {
+                    scheduleControlsHide()
+                } else {
+                    cancelControlsHide()
                 }
             }
             
@@ -309,6 +342,10 @@ class VideoPlayerView @JvmOverloads constructor(
         
         drawingToggleButton.setOnClickListener {
             toggleDrawingMode()
+        }
+        
+        doneDrawingButton.setOnClickListener {
+            if (isDrawingMode) toggleDrawingMode()
         }
         
         setupDrawingControls()
@@ -433,6 +470,14 @@ class VideoPlayerView @JvmOverloads constructor(
         undoButton.setOnClickListener { drawingOverlay.undoLastDrawing() }
         clearButton.setOnClickListener { drawingOverlay.clearAllDrawings() }
         
+        // Colour swatch: a filled circle with a white ring
+        val density = resources.displayMetrics.density
+        colorIndicator.background = android.graphics.drawable.GradientDrawable().apply {
+            shape = android.graphics.drawable.GradientDrawable.OVAL
+            setColor(currentDrawingColor)
+            setStroke((2 * density).toInt(), android.graphics.Color.WHITE)
+        }
+        
         // Set initial tool
         selectDrawingTool(DrawingOverlay.DrawingTool.PEN)
     }
@@ -440,9 +485,22 @@ class VideoPlayerView @JvmOverloads constructor(
     private fun toggleDrawingMode() {
         isDrawingMode = !isDrawingMode
         
-        drawingToggleButton.text = if (isDrawingMode) "Exit Draw" else "Draw"
+        // Drawing pins the controls: the rail replaces the top-right toggles and the title,
+        // and the play button gives way to Done so the transport reads prev / Done / next.
+        drawingToggleButton.isSelected = isDrawingMode
         drawingToolbar.visibility = if (isDrawingMode) View.VISIBLE else View.GONE
+        poseToggleButton.visibility = if (isDrawingMode) View.GONE else View.VISIBLE
+        drawingToggleButton.visibility = if (isDrawingMode) View.GONE else View.VISIBLE
+        playPauseButton.visibility = if (isDrawingMode) View.GONE else View.VISIBLE
+        doneDrawingButton.visibility = if (isDrawingMode) View.VISIBLE else View.GONE
+        updateTitleVisibility()
         drawingOverlay.setDrawingEnabled(isDrawingMode)
+        if (isDrawingMode) {
+            if (isPlaying) pause()
+            showControls()
+        } else {
+            scheduleControlsHide()
+        }
         
         Log.d(TAG, "Drawing mode: $isDrawingMode")
     }
@@ -452,19 +510,10 @@ class VideoPlayerView @JvmOverloads constructor(
         drawingOverlay.setCurrentTool(tool)
         
         // Update button states (highlight selected tool)
-        resetDrawingButtonStates()
-        when (tool) {
-            DrawingOverlay.DrawingTool.PEN -> penButton.alpha = 1.0f
-            DrawingOverlay.DrawingTool.ARROW -> arrowButton.alpha = 1.0f
-            else -> penButton.alpha = 1.0f // Default to pen for any other tool
-        }
+        penButton.isSelected = tool == DrawingOverlay.DrawingTool.PEN
+        arrowButton.isSelected = tool == DrawingOverlay.DrawingTool.ARROW
         
         Log.d(TAG, "Selected drawing tool: $tool")
-    }
-    
-    private fun resetDrawingButtonStates() {
-        penButton.alpha = 0.6f
-        arrowButton.alpha = 0.6f
     }
     
     private fun showColorPicker() {
@@ -486,7 +535,7 @@ class VideoPlayerView @JvmOverloads constructor(
         builder.setItems(colorNames) { _, which ->
             currentDrawingColor = colors[which]
             drawingOverlay.setCurrentColor(currentDrawingColor)
-            colorIndicator.setBackgroundColor(currentDrawingColor)
+            (colorIndicator.background as? android.graphics.drawable.GradientDrawable)?.setColor(currentDrawingColor)
         }
         builder.show()
     }
@@ -595,24 +644,12 @@ class VideoPlayerView @JvmOverloads constructor(
                             // If it was a quick tap, handle play/pause and notify parent
                             val holdDuration = System.currentTimeMillis() - holdStartTime
                             if (holdDuration < 200 && !zoomContainer.isZoomed()) { // Quick tap threshold
-                                // Notify parent activity about tap for controls toggle
-                                onVideoTapListener?.invoke()
-                                
-                                if (isPlaying) {
-                                    // Check for override listener
-                                    if (onPlayPauseListener != null) {
-                                        onPlayPauseListener!!(false) // false = pause
-                                    } else {
-                                        pause()
-                                    }
+                                // A tap reveals or hides the controls; play/pause is on the button
+                                val tapListener = onVideoTapListener
+                                if (tapListener != null) {
+                                    tapListener()
                                 } else {
-                                    // Check for override listener
-                                    if (onPlayPauseListener != null) {
-                                        onPlayPauseListener!!(true) // true = play
-                                    } else {
-                                        // Use built-in play with restart logic
-                                        play()
-                                    }
+                                    toggleControls()
                                 }
                             }
                             true
@@ -749,6 +786,11 @@ class VideoPlayerView @JvmOverloads constructor(
             onFrameStepListener!!(forward)
             return
         }
+        stepFrameLocal(forward)
+    }
+    
+    /** Step this player by one frame, ignoring any frame-step override. */
+    fun stepFrameLocal(forward: Boolean) {
         
         if (isPlaying) {
             pause()
@@ -808,7 +850,7 @@ class VideoPlayerView @JvmOverloads constructor(
         isPoseDetectionEnabled = !isPoseDetectionEnabled
         
         if (isPoseDetectionEnabled) {
-            poseToggleButton.text = "Hide Pose"
+            poseToggleButton.isSelected = true
             graphicOverlay.visibility = View.VISIBLE
             Log.d(TAG, "Pose detection enabled - overlay visible: ${graphicOverlay.visibility == View.VISIBLE}")
             
@@ -829,7 +871,7 @@ class VideoPlayerView @JvmOverloads constructor(
                 }
             }
         } else {
-            poseToggleButton.text = "Show Pose"
+            poseToggleButton.isSelected = false
             graphicOverlay.visibility = View.GONE
             graphicOverlay.clear()
             stopPoseProcessing()
@@ -942,29 +984,110 @@ class VideoPlayerView @JvmOverloads constructor(
     
     private fun updateTimeDisplay(position: Int) {
         try {
-            val currentSec = position / 1000
-            val totalSec = videoDuration.toInt() / 1000
-            val currentMin = currentSec / 60
-            val currentSecRem = currentSec % 60
-            val totalMin = totalSec / 60
-            val totalSecRem = totalSec % 60
+            currentTimeText.text = formatTime(position)
+            totalTimeText.text = formatTime(videoDuration.toInt())
+            progressLine.progress = position
             
+            // Round rather than floor: a step is frameDurationMs truncated to whole ms, so five
+            // 33ms steps land at 165ms, which floors to frame 4 but is frame 5.
             val displayFrameIndex = if (frameRate > 0 && position >= 0) {
-                ((position.toDouble() * frameRate) / 1000.0).toLong().coerceIn(0, totalFrames)
+                Math.round((position.toDouble() * frameRate) / 1000.0).coerceIn(0, totalFrames)
             } else {
                 0L
             }
+            // Embedded panels are half a screen wide, so the badge drops to the short form
+            frameBadge.text = if (isEmbedded) {
+                String.format("f %d", displayFrameIndex)
+            } else {
+                String.format("Frame %d/%d", displayFrameIndex, totalFrames)
+            }
             
-            timeDisplay.text = String.format("%d:%02d / %d:%02d (Frame %d/%d)", 
-                currentMin, currentSecRem, totalMin, totalSecRem, displayFrameIndex, totalFrames)
-                
             // Update play button icon based on position
             updatePlayButtonIcon(position)
         } catch (e: Exception) {
             Log.e(TAG, "Error updating time display", e)
-            timeDisplay.text = "0:00 / 0:00 (Frame 0/0)"
         }
     }
+    
+    private fun formatTime(ms: Int): String {
+        val totalSec = ms / 1000
+        return String.format("%d:%02d", totalSec / 60, totalSec % 60)
+    }
+    
+    /** The frame counter only shows while paused; while playing the progress line is enough. */
+    private fun updateFrameBadge() {
+        frameBadge.visibility = if (isPlaying) View.GONE else View.VISIBLE
+    }
+    
+    private fun updateTitleVisibility() {
+        val hasTitle = !titleText.text.isNullOrEmpty()
+        titleText.visibility = if (hasTitle && !isEmbedded && !isDrawingMode) View.VISIBLE else View.GONE
+    }
+    
+    // ---- Controls visibility -------------------------------------------------------------
+    
+    fun showControls() {
+        controlsVisible = true
+        topBar.visibility = View.VISIBLE
+        topBar.animate().alpha(1f).setDuration(200).start()
+        if (!isEmbedded) {
+            bottomControlsBar.visibility = View.VISIBLE
+            bottomControlsBar.animate().alpha(1f).translationY(0f).setDuration(200).start()
+        }
+        scheduleControlsHide()
+    }
+    
+    fun hideControls() {
+        if (isEmbedded || isDrawingMode) return
+        controlsVisible = false
+        cancelControlsHide()
+        topBar.animate().alpha(0f).setDuration(200)
+            .withEndAction { if (!controlsVisible) topBar.visibility = View.INVISIBLE }
+            .start()
+        bottomControlsBar.animate().alpha(0f).translationY(bottomControlsBar.height.toFloat()).setDuration(200)
+            .withEndAction { if (!controlsVisible) bottomControlsBar.visibility = View.INVISIBLE }
+            .start()
+    }
+    
+    fun toggleControls() {
+        if (controlsVisible) hideControls() else showControls()
+    }
+    
+    fun areControlsVisible(): Boolean = controlsVisible
+    
+    private fun scheduleControlsHide() {
+        cancelControlsHide()
+        if (isPlaying && !isEmbedded && !isDrawingMode) {
+            mainHandler.postDelayed(hideControlsRunnable, controlsHideDelayMs)
+        }
+    }
+    
+    private fun cancelControlsHide() {
+        mainHandler.removeCallbacks(hideControlsRunnable)
+    }
+    
+    /** Small caption shown top-left while the controls are visible (hidden in draw mode). */
+    fun setTitle(title: String?) {
+        titleText.text = title ?: ""
+        updateTitleVisibility()
+    }
+    
+    /**
+     * Embedded mode is for hosts that provide their own transport (video comparison):
+     * no bottom bar or progress line, and the corner controls never auto-hide.
+     */
+    fun setEmbedded(embedded: Boolean) {
+        isEmbedded = embedded
+        bottomControlsBar.visibility = if (embedded) View.GONE else View.VISIBLE
+        progressLine.visibility = if (embedded) View.GONE else View.VISIBLE
+        updateTitleVisibility()
+        if (embedded) {
+            cancelControlsHide()
+            showControls()
+        }
+    }
+    
+    fun getFrameDurationMs(): Double = frameDurationMs
     
     private fun updatePlayButtonIcon(position: Int) {
         if (!isPlaying) {
@@ -1024,10 +1147,6 @@ class VideoPlayerView @JvmOverloads constructor(
         onScrubListener = listener
     }
     
-    fun setOnPlayPauseListener(listener: (play: Boolean) -> Unit) {
-        onPlayPauseListener = listener
-    }
-    
     fun setOnVideoTapListener(listener: () -> Unit) {
         onVideoTapListener = listener
     }
@@ -1054,6 +1173,7 @@ class VideoPlayerView @JvmOverloads constructor(
             processingJob?.cancel()
             coroutineScope.cancel()
             seekBarUpdateRunnable?.let { mainHandler.removeCallbacks(it) }
+            cancelControlsHide()
         } catch (e: Exception) {
             Log.e(TAG, "Error releasing resources", e)
         }
