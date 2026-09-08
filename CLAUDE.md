@@ -138,6 +138,22 @@ bottom edge. All of it lives in `VideoPlayerView` (`view_video_player.xml`).
 
 The video gallery displays all recorded MTB videos with the following features:
 
+#### Where videos live, and surviving reinstalls
+Recordings and imports are MediaStore rows in `Movies/MTBAnalyzer` named `MTB_…`; the
+gallery lists everything matching `MTB_%`. Uninstalling does **not** delete them — Android
+only clears the owner — but a fresh install can't see files it doesn't own without the
+media-read permission (`READ_MEDIA_VIDEO` on 33+, `READ_EXTERNAL_STORAGE` on 29–32). The
+gallery requests it on first open (`MediaPermissions`); if denied, the empty state explains
+and re-prompts on tap. Deleting a video from a previous install goes through the system
+consent dialog (`MediaStore.createDeleteRequest`).
+
+#### Import
+- **Import button** (small FAB above Compare) opens the Photo Picker (video only, up to 10)
+- **Share to MTB Analyzer** from Photos or a file manager (`ACTION_SEND` / `SEND_MULTIPLE`)
+- Either way `VideoImporter` copies the clip into `Movies/MTBAnalyzer` as `MTB_<name>` (or
+  `MTB_import_<timestamp>.mp4` when the source has no usable name — the Photo Picker only
+  reports a numeric id), so it is owned by the app and behaves like a recording
+
 #### Gesture Controls
 - **Tap**: Play video with pose detection overlay
 - **Long Press**: Enter compare mode to select videos for side-by-side comparison
