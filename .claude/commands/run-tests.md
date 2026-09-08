@@ -1,5 +1,19 @@
 # Run Tests
 
+## Local (preferred while iterating)
+
+```bash
+source scripts/android-env.sh
+scripts/emulator.sh start                # no-op if already running
+./gradlew testDebugUnitTest              # unit tests
+./gradlew connectedDebugAndroidTest      # instrumented tests, ~30s
+```
+
+Results: `app/build/test-results/` (unit), `app/build/outputs/androidTest-results/connected/debug/`
+(instrumented, JUnit XML + per-test logcat). Per-test logcat is the first place to look on a failure.
+
+## CI (final check on a PR)
+
 Trigger and monitor test runs via GitHub Actions.
 
 ## Check Existing Test Results

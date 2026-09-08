@@ -11,6 +11,11 @@ on:
         default: ''
         type: string
 
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
 jobs:
   instrumented-test:
     runs-on: ubuntu-latest
@@ -71,7 +76,7 @@ jobs:
           force-avd-creation: false
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
-          script: adb uninstall com.mtbanalyzer || true; adb uninstall com.mtbanalyzer.test || true; adb logcat -c; ./gradlew connectedDebugAndroidTest ${TEST_CLASS:+-Pandroid.testInstrumentationRunnerArguments.class=$TEST_CLASS} || true; adb logcat -d '*:E' > logcat_errors.txt; adb logcat -d DetectionTuning:* DETECTION_TUNING:* AndroidRuntime:* > logcat_app.txt
+          script: adb uninstall com.mtbanalyzer || true; adb uninstall com.mtbanalyzer.test || true; adb logcat -c; ./gradlew connectedDebugAndroidTest ${TEST_CLASS:+-Pandroid.testInstrumentationRunnerArguments.class=$TEST_CLASS}; rc=$?; adb logcat -d '*:E' > logcat_errors.txt; adb logcat -d DetectionTuning:* DETECTION_TUNING:* AndroidRuntime:* > logcat_app.txt; exit $rc
 
       - name: Upload Logcat
         uses: actions/upload-artifact@v4

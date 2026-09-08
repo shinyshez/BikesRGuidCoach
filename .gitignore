@@ -13,3 +13,6 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Local screenshot-capture output (scripts/capture-screenshots.sh)
+/screenshots/
