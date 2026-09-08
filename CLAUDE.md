@@ -69,9 +69,18 @@ source scripts/android-env.sh          # JAVA_HOME, ANDROID_HOME, adb/emulator o
 scripts/emulator.sh start              # boot headless AVD "mtb-test" (API 34 arm64), ~30s cold
 ./gradlew assembleDebug                 # ~2 min first time, seconds after
 ./gradlew connectedDebugAndroidTest     # Espresso tests on the emulator, ~30s
+scripts/emulator.sh install             # reinstall + grant permissions (tests uninstall the app)
 bash scripts/capture-screenshots.sh     # drive every screen, PNGs + logcat in ./screenshots/
 scripts/emulator.sh stop
 ```
+
+Gotchas when driving the app by hand: `connectedDebugAndroidTest` uninstalls the app
+afterwards (and with it runtime permissions and SharedPreferences), so run
+`scripts/emulator.sh install` before any manual capture. `uiautomator dump` fails with
+"could not get idle state" on screens with two video surfaces (comparison); use
+`adb shell dumpsys activity top` for the view hierarchy there and tap by coordinates.
+A pushed video needs `adb shell content call --uri content://media/external_primary/file
+--method scan_file --arg <path>` before the gallery can see it (`is_pending` is cleared).
 
 `scripts/emulator.sh create` (one-off) builds the AVD. The screenshot script is the
 same one CI runs; it finds views by `content-desc`/`text` via `uiautomator dump`
@@ -112,6 +121,19 @@ as the final check on a PR; the local loop is for iteration.
 - **Status Display**: Shows monitoring status, detection confidence, and recording progress (hidden when auto-record is off)
 - **Navigation**: Gallery and Settings buttons positioned on either side of the record button
 
+### Video Playback
+
+Playback is deliberately chrome-free while playing: only a 2dp progress line along the
+bottom edge. All of it lives in `VideoPlayerView` (`view_video_player.xml`).
+
+- **Tap** the video to reveal/hide the controls; they auto-hide 3s after play starts
+- **Revealed**: title (top-left), Pose and Draw icon toggles (top-right, filled when on),
+  seekbar with `0:04 … 0:08` times, and prev-frame / play / next-frame
+- **Paused**: a `Frame 237/240` badge appears top-left (hidden while playing)
+- **Draw**: tools move to a rail on the right edge (pen, arrow, colour, undo, clear); the
+  title and toggles hide and the transport reads prev / Done / next
+- **Hold** on the video to scrub; pinch to zoom while paused (unchanged)
+
 ### Video Gallery
 
 The video gallery displays all recorded MTB videos with the following features:
@@ -126,6 +148,16 @@ The video gallery displays all recorded MTB videos with the following features:
 - Long press any video to enter compare mode
 - Tap additional videos to select for comparison
 - Use "Compare" button when 2 videos are selected
+
+#### Comparison Screen
+- Clips sit **side by side in both orientations** (portrait clips fit two across)
+- One **shared transport**: seekbar, prev / play / next, a Lock toggle and a `Δ +5f` chip
+  showing clip 2's offset from clip 1 in frames
+- **Locked** (default for a new pair): the transport drives both clips at the offset
+- **Unlocked**: tap a clip to make it active (white outline; the other dims); the transport
+  drives only that clip — step it to dial in the offset, then lock
+- Lock state and offset are **remembered per pair of clips** (`CompareSyncStore`, keyed on
+  the two MediaStore ids); each clip keeps its own Pose / Draw toggles and `f 5` frame badge
 
 #### Delete Functionality
 - Swipe any video thumbnail left or right to reveal delete action

@@ -11,7 +11,7 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
-        
+
         <!-- Media3 PlayerView for frame-accurate seeking -->
         <androidx.media3.ui.PlayerView
             android:id="@+id/playerView"
@@ -20,9 +20,8 @@
             app:use_controller="false"
             app:resize_mode="fit"
             app:surface_type="texture_view" />
-            
-    </com.mtbanalyzer.ZoomablePlayerContainer>
 
+    </com.mtbanalyzer.ZoomablePlayerContainer>
 
     <!-- Pose detection overlay -->
     <com.mtbanalyzer.GraphicOverlay
@@ -34,7 +33,7 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
-        
+
     <!-- Scrub gesture overlay -->
     <com.mtbanalyzer.ScrubOverlay
         android:id="@+id/scrub_overlay"
@@ -45,7 +44,7 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
-        
+
     <!-- Drawing overlay -->
     <com.mtbanalyzer.DrawingOverlay
         android:id="@+id/drawing_overlay"
@@ -68,19 +67,167 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
-    <!-- Bottom controls bar -->
+    <!-- Always-visible 2dp progress line: the only chrome while playing -->
+    <ProgressBar
+        android:id="@+id/progressLine"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="0dp"
+        android:layout_height="2dp"
+        android:progressTint="@android:color/white"
+        android:progressBackgroundTint="#40FFFFFF"
+        android:max="100"
+        android:progress="0"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- Top bar: frame badge + title on the left, Pose / Draw toggles on the right -->
+    <LinearLayout
+        android:id="@+id/topBar"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:paddingTop="10dp"
+        android:paddingBottom="10dp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <TextView
+            android:id="@+id/frameBadge"
+            android:layout_width="wrap_content"
+            android:layout_height="28dp"
+            android:gravity="center"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:background="@drawable/badge_background"
+            android:text="Frame 0/0"
+            android:textColor="@android:color/white"
+            android:textSize="12sp"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/titleText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:layout_marginEnd="8dp"
+            android:alpha="0.85"
+            android:singleLine="true"
+            android:ellipsize="end"
+            android:textColor="@android:color/white"
+            android:textSize="13sp"
+            android:visibility="gone" />
+
+        <ImageButton
+            android:id="@+id/poseToggleButton"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_marginEnd="8dp"
+            android:src="@drawable/ic_pose"
+            app:tint="@color/toggle_icon_tint"
+            android:background="@drawable/button_circle_toggle_background"
+            android:contentDescription="Toggle pose overlay" />
+
+        <ImageButton
+            android:id="@+id/drawingToggleButton"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:src="@drawable/ic_pen"
+            app:tint="@color/toggle_icon_tint"
+            android:background="@drawable/button_circle_toggle_background"
+            android:contentDescription="Draw" />
+
+    </LinearLayout>
+
+    <!-- Drawing tools: a vertical rail on the right edge, only while drawing -->
+    <LinearLayout
+        android:id="@+id/drawingToolbar"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:padding="6dp"
+        android:layout_marginEnd="10dp"
+        android:background="@drawable/rail_background"
+        android:visibility="gone"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <ImageButton
+            android:id="@+id/penButton"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@drawable/ic_pen"
+            app:tint="@color/toggle_icon_tint"
+            android:background="@drawable/button_circle_toggle_background"
+            android:contentDescription="Pen" />
+
+        <ImageButton
+            android:id="@+id/arrowButton"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginTop="8dp"
+            android:src="@drawable/ic_arrow_tool"
+            app:tint="@color/toggle_icon_tint"
+            android:background="@drawable/button_circle_toggle_background"
+            android:contentDescription="Arrow" />
+
+        <FrameLayout
+            android:id="@+id/colorButton"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginTop="8dp"
+            android:contentDescription="Color">
+
+            <View
+                android:id="@+id/colorIndicator"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:layout_gravity="center" />
+
+        </FrameLayout>
+
+        <ImageButton
+            android:id="@+id/undoButton"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginTop="8dp"
+            android:src="@drawable/ic_undo"
+            android:background="@drawable/button_circle_background"
+            android:contentDescription="Undo" />
+
+        <ImageButton
+            android:id="@+id/clearButton"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginTop="8dp"
+            android:src="@drawable/ic_clear"
+            android:background="@drawable/button_circle_background"
+            android:contentDescription="Clear All" />
+
+    </LinearLayout>
+
+    <!-- Bottom controls bar: seek row + transport, revealed by a tap, auto-hides -->
     <LinearLayout
         android:id="@+id/bottomControlsBar"
-        android:layout_width="match_parent"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:background="@drawable/controls_gradient_bottom"
-        android:padding="16dp"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingTop="24dp"
+        android:paddingBottom="20dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <!-- Time display and seekbar -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -88,13 +235,13 @@
             android:gravity="center_vertical">
 
             <TextView
-                android:id="@+id/timeDisplay"
+                android:id="@+id/currentTimeText"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="0:00 / 0:00"
+                android:text="0:00"
                 android:textColor="@android:color/white"
-                android:textSize="14sp"
-                android:layout_marginEnd="16dp" />
+                android:textSize="13sp"
+                android:layout_marginEnd="12dp" />
 
             <SeekBar
                 android:id="@+id/seekBar"
@@ -103,17 +250,25 @@
                 android:layout_weight="1"
                 android:progressTint="@android:color/white"
                 android:thumbTint="@android:color/white"
-                android:progressBackgroundTint="#80FFFFFF" />
+                android:progressBackgroundTint="#40FFFFFF" />
+
+            <TextView
+                android:id="@+id/totalTimeText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="0:00"
+                android:textColor="#BBBBBB"
+                android:textSize="13sp"
+                android:layout_marginStart="12dp" />
 
         </LinearLayout>
 
-        <!-- Control buttons -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center"
-            android:layout_marginTop="8dp">
+            android:layout_marginTop="12dp">
 
             <ImageButton
                 android:id="@+id/frameBackwardButton"
@@ -122,7 +277,7 @@
                 android:src="@android:drawable/ic_media_rew"
                 android:background="@drawable/button_circle_background"
                 android:contentDescription="Previous Frame"
-                android:layout_marginEnd="16dp" />
+                android:layout_marginEnd="18dp" />
 
             <ImageButton
                 android:id="@+id/playPauseButton"
@@ -130,8 +285,18 @@
                 android:layout_height="64dp"
                 android:src="@android:drawable/ic_media_play"
                 android:background="@drawable/button_circle_background"
-                android:contentDescription="Play/Pause"
-                android:layout_marginEnd="16dp" />
+                android:contentDescription="Play/Pause" />
+
+            <Button
+                android:id="@+id/doneDrawingButton"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:minWidth="72dp"
+                android:text="Done"
+                android:textAllCaps="false"
+                android:textColor="@android:color/white"
+                android:background="@drawable/button_overlay_background"
+                android:visibility="gone" />
 
             <ImageButton
                 android:id="@+id/frameForwardButton"
@@ -140,93 +305,9 @@
                 android:src="@android:drawable/ic_media_ff"
                 android:background="@drawable/button_circle_background"
                 android:contentDescription="Next Frame"
-                android:layout_marginEnd="32dp" />
-
-            <Button
-                android:id="@+id/poseToggleButton"
-                android:layout_width="wrap_content"
-                android:layout_height="48dp"
-                android:text="Show Pose"
-                android:textColor="@android:color/white"
-                android:background="@drawable/button_overlay_background"
-                android:layout_marginEnd="16dp" />
-
-            <Button
-                android:id="@+id/drawingToggleButton"
-                android:layout_width="wrap_content"
-                android:layout_height="48dp"
-                android:text="Draw"
-                android:textColor="@android:color/white"
-                android:background="@drawable/button_overlay_background" />
+                android:layout_marginStart="18dp" />
 
         </LinearLayout>
-
-    </LinearLayout>
-
-    <!-- Drawing toolbar -->
-    <LinearLayout
-        android:id="@+id/drawingToolbar"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:background="@drawable/controls_gradient_top"
-        android:padding="12dp"
-        android:gravity="center"
-        android:visibility="gone"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
-
-        <ImageButton
-            android:id="@+id/penButton"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:src="@android:drawable/ic_menu_edit"
-            android:background="@drawable/button_circle_background"
-            android:contentDescription="Pen"
-            android:layout_marginEnd="16dp" />
-
-        <ImageButton
-            android:id="@+id/arrowButton"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:src="@android:drawable/ic_media_play"
-            android:background="@drawable/button_circle_background"
-            android:contentDescription="Arrow"
-            android:layout_marginEnd="16dp" />
-
-        <View
-            android:id="@+id/colorIndicator"
-            android:layout_width="24dp"
-            android:layout_height="24dp"
-            android:background="@android:color/holo_red_dark"
-            android:layout_marginEnd="8dp" />
-
-        <ImageButton
-            android:id="@+id/colorButton"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:src="@android:drawable/ic_menu_gallery"
-            android:background="@drawable/button_circle_background"
-            android:contentDescription="Color"
-            android:layout_marginEnd="16dp" />
-
-        <ImageButton
-            android:id="@+id/undoButton"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:src="@android:drawable/ic_menu_revert"
-            android:background="@drawable/button_circle_background"
-            android:contentDescription="Undo"
-            android:layout_marginEnd="8dp" />
-
-        <ImageButton
-            android:id="@+id/clearButton"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:src="@android:drawable/ic_menu_close_clear_cancel"
-            android:background="@drawable/button_circle_background"
-            android:contentDescription="Clear All" />
 
     </LinearLayout>
 

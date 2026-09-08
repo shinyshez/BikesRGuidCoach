@@ -6,7 +6,7 @@
     android:background="@android:color/black"
     android:fitsSystemWindows="false">
 
-    <!-- Custom Video Player View -->
+    <!-- The player view owns all playback chrome (progress line, top bar, bottom controls) -->
     <com.mtbanalyzer.VideoPlayerView
         android:id="@+id/videoPlayerView"
         android:layout_width="0dp"
@@ -15,56 +15,5 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
-
-    <!-- Overlay Controls Container -->
-    <FrameLayout
-        android:id="@+id/controlsContainer"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        android:clickable="false"
-        android:focusable="false"
-        android:elevation="10dp"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
-
-        <!-- Top Controls Bar -->
-        <LinearLayout
-            android:id="@+id/topControlsBar"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_gravity="top"
-            android:orientation="horizontal"
-            android:background="@drawable/controls_gradient_top"
-            android:padding="16dp"
-            android:gravity="center_vertical"
-            android:elevation="12dp">
-
-            <TextView
-                android:id="@+id/videoTitle"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Video Title"
-                android:textColor="@android:color/white"
-                android:textSize="18sp"
-                android:textStyle="bold"
-                android:singleLine="true"
-                android:ellipsize="end"
-                android:clickable="true"
-                android:focusable="true" />
-
-        </LinearLayout>
-
-        <!-- Empty bottom bar to match video player controls -->
-        <View
-            android:id="@+id/bottomControlsBar"
-            android:layout_width="match_parent"
-            android:layout_height="1dp"
-            android:layout_gravity="bottom"
-            android:visibility="invisible" />
-
-    </FrameLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

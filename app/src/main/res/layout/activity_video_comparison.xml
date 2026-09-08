@@ -5,80 +5,166 @@
     android:layout_height="match_parent"
     android:background="#000000">
 
-    <!-- Video Container -->
+    <!-- Two clips side by side in every orientation (portrait clips fit two across) -->
     <LinearLayout
         android:id="@+id/videoContainer"
         android:layout_width="0dp"
         android:layout_height="0dp"
         android:orientation="horizontal"
-        android:weightSum="2"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toTopOf="@+id/controlsContainer"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <!-- Video 1 Section -->
-        <LinearLayout
+        <FrameLayout
             android:id="@+id/video1Section"
             android:layout_width="0dp"
             android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:orientation="vertical"
-            android:padding="4dp">
+            android:layout_weight="1">
 
             <com.mtbanalyzer.VideoPlayerView
                 android:id="@+id/videoPlayer1"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent" />
 
-        </LinearLayout>
+        </FrameLayout>
 
-        <!-- Divider -->
         <View
             android:id="@+id/divider"
             android:layout_width="2dp"
             android:layout_height="match_parent"
-            android:background="#FFFFFF" />
+            android:background="#80FFFFFF" />
 
-        <!-- Video 2 Section -->
-        <LinearLayout
+        <FrameLayout
             android:id="@+id/video2Section"
             android:layout_width="0dp"
             android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:orientation="vertical"
-            android:padding="4dp">
+            android:layout_weight="1">
 
             <com.mtbanalyzer.VideoPlayerView
                 android:id="@+id/videoPlayer2"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent" />
 
-        </LinearLayout>
+        </FrameLayout>
 
     </LinearLayout>
 
-    <!-- Global Controls Container -->
+    <!-- One shared transport for both clips -->
     <LinearLayout
         android:id="@+id/controlsContainer"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:background="#E6000000"
-        android:padding="16dp"
+        android:background="#000000"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingTop="12dp"
+        android:paddingBottom="16dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <!-- Control Buttons -->
-        <Button
-            android:id="@+id/lockButton"
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Lock"
-            android:layout_gravity="center"
-            android:backgroundTint="#4444FF"
-            android:textColor="#FFFFFF" />
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/compareCurrentTimeText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="0:00"
+                android:textColor="#FFFFFF"
+                android:textSize="13sp"
+                android:layout_marginEnd="10dp" />
+
+            <SeekBar
+                android:id="@+id/sharedSeekBar"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:progressTint="#FFFFFF"
+                android:thumbTint="#FFFFFF"
+                android:progressBackgroundTint="#40FFFFFF" />
+
+            <TextView
+                android:id="@+id/compareTotalTimeText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="0:00"
+                android:textColor="#BBBBBB"
+                android:textSize="13sp"
+                android:layout_marginStart="10dp" />
+
+        </LinearLayout>
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp">
+
+            <ImageButton
+                android:id="@+id/lockButton"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_gravity="start|center_vertical"
+                android:src="@drawable/ic_lock"
+                app:tint="@color/toggle_icon_tint"
+                android:background="@drawable/button_circle_toggle_background"
+                android:contentDescription="Lock clips together" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <ImageButton
+                    android:id="@+id/compareFrameBackwardButton"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:src="@android:drawable/ic_media_rew"
+                    android:background="@drawable/button_circle_background"
+                    android:contentDescription="Previous Frame"
+                    android:layout_marginEnd="14dp" />
+
+                <ImageButton
+                    android:id="@+id/comparePlayPauseButton"
+                    android:layout_width="56dp"
+                    android:layout_height="56dp"
+                    android:src="@android:drawable/ic_media_play"
+                    android:background="@drawable/button_circle_background"
+                    android:contentDescription="Play/Pause" />
+
+                <ImageButton
+                    android:id="@+id/compareFrameForwardButton"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:src="@android:drawable/ic_media_ff"
+                    android:background="@drawable/button_circle_background"
+                    android:contentDescription="Next Frame"
+                    android:layout_marginStart="14dp" />
+
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/offsetChip"
+                android:layout_width="wrap_content"
+                android:layout_height="30dp"
+                android:layout_gravity="end|center_vertical"
+                android:gravity="center"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:background="@drawable/badge_background"
+                android:text="Δ 0f"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:contentDescription="Sync offset" />
+
+        </FrameLayout>
 
     </LinearLayout>
 
