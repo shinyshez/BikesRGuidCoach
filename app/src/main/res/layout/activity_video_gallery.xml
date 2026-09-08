@@ -61,8 +61,11 @@
         android:id="@+id/empty_view"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="No videos recorded yet\n\nStart riding to capture some footage!"
+        android:text="No videos yet\n\nStart riding to capture some footage,\nor import a clip from your phone."
         android:textColor="#FFFFFF"
+        android:padding="24dp"
+        android:clickable="true"
+        android:focusable="true"
         android:textSize="16sp"
         android:textAlignment="center"
         android:lineSpacingMultiplier="1.5"
@@ -71,6 +74,21 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- Import a clip from the phone (Photo Picker) -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/importButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="24dp"
+        android:layout_marginBottom="16dp"
+        app:fabSize="mini"
+        android:src="@drawable/ic_import"
+        app:tint="#FFFFFF"
+        app:backgroundTint="#333333"
+        app:layout_constraintBottom_toTopOf="@+id/compareButton"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:contentDescription="Import video" />
 
     <!-- Floating Action Button for Compare Mode -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton

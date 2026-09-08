@@ -30,6 +30,13 @@ import com.bumptech.glide.Glide
 import com.bumptech.glide.request.RequestOptions
 import java.text.SimpleDateFormat
 import java.util.*
+import android.app.Activity
+import android.app.RecoverableSecurityException
+import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 
 data class VideoItem(
     val id: Long,
@@ -55,6 +62,32 @@ class VideoGalleryActivity : AppCompatActivity() {
     private val selectedVideos = mutableListOf<VideoItem>()
     private var isCompareMode = false
     private lateinit var itemTouchHelper: ItemTouchHelper
+    private lateinit var importButton: com.google.android.material.floatingactionbutton.FloatingActionButton
+    private lateinit var importer: VideoImporter
+    private var readPermissionDenied = false
+
+    // Media read permission: without it MediaStore hides videos from a previous install
+    private val requestReadPermission = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        readPermissionDenied = !granted
+        loadVideos()
+    }
+
+    // Photo Picker: no permission needed, works back to API 24 via the backport
+    private val pickVideos = registerForActivityResult(
+        ActivityResultContracts.PickMultipleVisualMedia(10)
+    ) { uris -> if (uris.isNotEmpty()) importVideos(uris) }
+
+    // System consent for deleting a video this install doesn't own (API 29+)
+    private val deleteConsent = registerForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            Toast.makeText(this, "Video deleted", Toast.LENGTH_SHORT).show()
+        }
+        loadVideos()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -63,8 +96,62 @@ class VideoGalleryActivity : AppCompatActivity() {
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         supportActionBar?.title = "Video Gallery"
         
+        importer = VideoImporter(this)
         setupUI()
-        loadVideos()
+        ensureReadPermissionThenLoad()
+        handleShareIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleShareIntent(intent)
+    }
+
+    /** A clip shared to the app from Photos or a file manager is imported like a picked one. */
+    private fun handleShareIntent(intent: Intent?) {
+        intent ?: return
+        val uris: List<Uri> = when (intent.action) {
+            Intent.ACTION_SEND -> listOfNotNull(intent.getParcelableExtra(Intent.EXTRA_STREAM))
+            Intent.ACTION_SEND_MULTIPLE -> intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM).orEmpty()
+            else -> emptyList()
+        }
+        if (uris.isEmpty()) return
+        intent.action = null // don't import again on rotation
+        importVideos(uris)
+    }
+
+    private fun ensureReadPermissionThenLoad() {
+        if (MediaPermissions.hasReadVideoPermission(this)) {
+            loadVideos()
+        } else {
+            requestReadPermission.launch(MediaPermissions.readVideoPermission())
+        }
+    }
+
+    private fun importVideos(uris: List<Uri>) {
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Importing")
+            .setMessage("Importing 1 of ${uris.size}…")
+            .setCancelable(false)
+            .create()
+        dialog.show()
+        lifecycleScope.launch {
+            var imported = 0
+            uris.forEachIndexed { index, uri ->
+                dialog.setMessage("Importing ${index + 1} of ${uris.size}…")
+                if (importer.import(uri) != null) imported++
+            }
+            dialog.dismiss()
+            val failed = uris.size - imported
+            Toast.makeText(
+                this@VideoGalleryActivity,
+                if (failed == 0) "Imported $imported video${if (imported == 1) "" else "s"}"
+                else "Imported $imported, failed $failed",
+                Toast.LENGTH_SHORT
+            ).show()
+            loadVideos()
+        }
     }
 
     override fun onSupportNavigateUp(): Boolean {
@@ -104,6 +191,14 @@ class VideoGalleryActivity : AppCompatActivity() {
         recyclerView = findViewById(R.id.recycler_view)
         emptyView = findViewById(R.id.empty_view)
         compareButton = findViewById(R.id.compareButton)
+        importButton = findViewById(R.id.importButton)
+        importButton.setOnClickListener {
+            pickVideos.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly))
+        }
+        // The empty state doubles as the permission prompt when access was denied
+        emptyView.setOnClickListener {
+            if (readPermissionDenied) requestReadPermission.launch(MediaPermissions.readVideoPermission())
+        }
         cancelCompareButton = findViewById(R.id.cancelCompareButton)
         val startCompareButton = findViewById<android.widget.Button>(R.id.startCompareButton)
         val compareControls = findViewById<android.view.View>(R.id.compareControls)
@@ -212,6 +307,11 @@ class VideoGalleryActivity : AppCompatActivity() {
         if (videos.isEmpty()) {
             recyclerView.visibility = View.GONE
             emptyView.visibility = View.VISIBLE
+            emptyView.text = if (readPermissionDenied) {
+                "MTB Analyzer can't see your videos without permission.\n\nTap here to allow access."
+            } else {
+                "No videos yet\n\nStart riding to capture some footage,\nor import a clip from your phone."
+            }
         } else {
             recyclerView.visibility = View.VISIBLE
             emptyView.visibility = View.GONE
@@ -446,8 +546,20 @@ class VideoGalleryActivity : AppCompatActivity() {
                 Toast.makeText(this, "Failed to delete video", Toast.LENGTH_SHORT).show()
             }
         } catch (e: SecurityException) {
-            Log.e(TAG, "Permission denied to delete video", e)
-            Toast.makeText(this, "Permission denied to delete video", Toast.LENGTH_LONG).show()
+            // A video from a previous install or another app: ask the system for consent
+            val intentSender = when {
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.R ->
+                    MediaStore.createDeleteRequest(contentResolver, listOf(video.uri)).intentSender
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && e is RecoverableSecurityException ->
+                    e.userAction.actionIntent.intentSender
+                else -> null
+            }
+            if (intentSender != null) {
+                deleteConsent.launch(IntentSenderRequest.Builder(intentSender).build())
+            } else {
+                Log.e(TAG, "Permission denied to delete video", e)
+                Toast.makeText(this, "Permission denied to delete video", Toast.LENGTH_LONG).show()
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error deleting video", e)
             Toast.makeText(this, "Error deleting video: ${e.message}", Toast.LENGTH_SHORT).show()

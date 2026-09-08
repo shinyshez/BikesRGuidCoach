@@ -11,6 +11,10 @@
     <!-- Storage permissions for different Android versions -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
+    <!-- Reading videos this install doesn't own (previous installs, other apps): API 33+ uses
+         READ_MEDIA_VIDEO, API 29-32 need READ_EXTERNAL_STORAGE. Requested from the gallery. -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
 
     <!-- Camera hardware requirement -->
@@ -48,10 +52,22 @@
             
         <activity
             android:name=".VideoGalleryActivity"
-            android:exported="false"
+            android:exported="true"
             android:parentActivityName=".MainActivity"
             android:configChanges="orientation|screenSize|keyboardHidden"
-            android:screenOrientation="sensor" />
+            android:screenOrientation="sensor">
+            <!-- "Share to MTB Analyzer" from Photos or a file manager imports the clip -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+        </activity>
             
         <activity
             android:name=".VideoComparisonActivity"
