@@ -21,18 +21,14 @@
             app:resize_mode="fit"
             app:surface_type="texture_view" />
 
-    </com.mtbanalyzer.ZoomablePlayerContainer>
+        <!-- Pose overlay lives inside the zoom container so it scales and pans with the video -->
+        <com.mtbanalyzer.GraphicOverlay
+            android:id="@+id/graphic_overlay"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone" />
 
-    <!-- Pose detection overlay -->
-    <com.mtbanalyzer.GraphicOverlay
-        android:id="@+id/graphic_overlay"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        android:visibility="gone"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
+    </com.mtbanalyzer.ZoomablePlayerContainer>
 
     <!-- Scrub gesture overlay -->
     <com.mtbanalyzer.ScrubOverlay
@@ -210,6 +206,22 @@
             android:src="@drawable/ic_clear"
             android:background="@drawable/button_circle_background"
             android:contentDescription="Clear All" />
+
+        <View
+            android:layout_width="24dp"
+            android:layout_height="1dp"
+            android:layout_marginTop="10dp"
+            android:background="#40FFFFFF" />
+
+        <ImageButton
+            android:id="@+id/railDoneButton"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginTop="10dp"
+            android:src="@drawable/ic_check"
+            app:tint="@android:color/white"
+            android:background="@drawable/button_circle_background"
+            android:contentDescription="Done drawing" />
 
     </LinearLayout>
 

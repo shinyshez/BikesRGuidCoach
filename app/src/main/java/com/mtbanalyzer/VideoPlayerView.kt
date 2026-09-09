@@ -58,6 +58,7 @@ class VideoPlayerView @JvmOverloads constructor(
     private lateinit var topBar: View
     private lateinit var bottomControlsBar: View
     private lateinit var doneDrawingButton: Button
+    private lateinit var railDoneButton: ImageButton
     private lateinit var poseToggleButton: ImageButton
     private lateinit var drawingToggleButton: ImageButton
     private lateinit var loadingIndicator: ProgressBar
@@ -154,6 +155,7 @@ class VideoPlayerView @JvmOverloads constructor(
         topBar = findViewById(R.id.topBar)
         bottomControlsBar = findViewById(R.id.bottomControlsBar)
         doneDrawingButton = findViewById(R.id.doneDrawingButton)
+        railDoneButton = findViewById(R.id.railDoneButton)
         poseToggleButton = findViewById(R.id.poseToggleButton)
         drawingToggleButton = findViewById(R.id.drawingToggleButton)
         loadingIndicator = findViewById(R.id.loadingIndicator)
@@ -344,6 +346,7 @@ class VideoPlayerView @JvmOverloads constructor(
             toggleDrawingMode()
         }
         
+        railDoneButton.setOnClickListener { exitDrawingMode() }
         doneDrawingButton.setOnClickListener {
             if (isDrawingMode) toggleDrawingMode()
         }
@@ -505,6 +508,13 @@ class VideoPlayerView @JvmOverloads constructor(
         Log.d(TAG, "Drawing mode: $isDrawingMode")
     }
     
+    fun isDrawingMode(): Boolean = isDrawingMode
+
+    /** Leaves draw mode if it is on (the host's back button calls this before finishing). */
+    fun exitDrawingMode() {
+        if (isDrawingMode) toggleDrawingMode()
+    }
+
     private fun selectDrawingTool(tool: DrawingOverlay.DrawingTool) {
         currentDrawingTool = tool
         drawingOverlay.setCurrentTool(tool)
@@ -725,8 +735,23 @@ class VideoPlayerView @JvmOverloads constructor(
     
     // Zoom gestures are handled by ZoomablePlayerContainer
     
-    private fun resetZoom() {
+    fun resetZoom() {
         zoomContainer.reset()
+    }
+
+    fun isZoomed(): Boolean = zoomContainer.isZoomed()
+
+    /** Called after a pinch or pan on this clip, with the transform in view-independent form. */
+    fun setOnZoomChangedListener(listener: ((scale: Float, fractionX: Float, fractionY: Float) -> Unit)?) {
+        zoomContainer.onTransformChanged = listener
+    }
+
+    /** Current zoom as (scale, fractionX, fractionY), the form [applyZoom] takes. */
+    fun getZoom(): FloatArray = zoomContainer.getNormalizedTransform()
+
+    /** Mirrors a zoom from another clip without re-reporting it through the listener. */
+    fun applyZoom(scale: Float, fractionX: Float, fractionY: Float) {
+        zoomContainer.setNormalizedTransform(scale, fractionX, fractionY)
     }
     
     // Zoom transformation is handled by ZoomablePlayerContainer

@@ -37,6 +37,16 @@ class VideoPlaybackActivity : AppCompatActivity() {
         return true
     }
 
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
+        // Back leaves draw mode before it leaves the screen
+        if (videoPlayerView.isDrawingMode()) {
+            videoPlayerView.exitDrawingMode()
+            return
+        }
+        super.onBackPressed()
+    }
+
     private fun setupVideoData() {
         val videoUri = intent.getStringExtra(EXTRA_VIDEO_URI)?.let { Uri.parse(it) }
         val videoName = intent.getStringExtra(EXTRA_VIDEO_NAME) ?: "Video"

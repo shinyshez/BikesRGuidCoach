@@ -130,9 +130,11 @@ bottom edge. All of it lives in `VideoPlayerView` (`view_video_player.xml`).
 - **Revealed**: title (top-left), Pose and Draw icon toggles (top-right, filled when on),
   seekbar with `0:04 … 0:08` times, and prev-frame / play / next-frame
 - **Paused**: a `Frame 237/240` badge appears top-left (hidden while playing)
-- **Draw**: tools move to a rail on the right edge (pen, arrow, colour, undo, clear); the
-  title and toggles hide and the transport reads prev / Done / next
-- **Hold** on the video to scrub; pinch to zoom while paused (unchanged)
+- **Draw**: tools move to a rail on the right edge (pen, arrow, colour, undo, clear, and a
+  tick to finish); the title and toggles hide and the transport reads prev / Done / next.
+  Back also leaves draw mode before it leaves the screen
+- **Hold** on the video to scrub; pinch to zoom while paused. The pose overlay sits inside
+  `ZoomablePlayerContainer` so it zooms and pans with the video (drawings do not)
 
 ### Video Gallery
 
@@ -169,7 +171,9 @@ consent dialog (`MediaStore.createDeleteRequest`).
 - Clips sit **side by side in both orientations** (portrait clips fit two across)
 - One **shared transport**: seekbar, prev / play / next, a Lock toggle and a `Δ +5f` chip
   showing clip 2's offset from clip 1 in frames
-- **Locked** (default for a new pair): the transport drives both clips at the offset
+- **Locked** (default for a new pair): the transport drives both clips at the offset, and a
+  pinch or pan on either clip is mirrored on the other (`setOnZoomChangedListener` /
+  `applyZoom`); re-locking copies the active clip's zoom across
 - **Unlocked**: tap a clip to make it active (white outline; the other dims); the transport
   drives only that clip — step it to dial in the offset, then lock
 - Lock state and offset are **remembered per pair of clips** (`CompareSyncStore`, keyed on
