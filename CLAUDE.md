@@ -81,6 +81,9 @@ afterwards (and with it runtime permissions and SharedPreferences), so run
 `adb shell dumpsys activity top` for the view hierarchy there and tap by coordinates.
 A pushed video needs `adb shell content call --uri content://media/external_primary/file
 --method scan_file --arg <path>` before the gallery can see it (`is_pending` is cleared).
+`adb shell input` has no pinch; for zoom, `adb root` (works on this AVD) then drive two
+slots on `/dev/input/event1` with `sendevent` (protocol B: ABS_MT_SLOT 47, TRACKING_ID 57,
+POSITION_X/Y 53/54, coords scaled to 0..32767) and `adb unroot` afterwards.
 
 `scripts/emulator.sh create` (one-off) builds the AVD. The screenshot script is the
 same one CI runs; it finds views by `content-desc`/`text` via `uiautomator dump`
