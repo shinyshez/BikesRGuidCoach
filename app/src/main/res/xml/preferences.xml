@@ -10,8 +10,8 @@
         <SwitchPreferenceCompat
             android:key="rider_detection_enabled"
             android:title="Enable Rider Detection"
-            android:summary="Turn rider detection on or off"
-            android:defaultValue="true" />
+            android:summary="Auto-record for this session; always off when the app opens"
+            android:defaultValue="false" />
 
         <ListPreference
             android:key="detector_type"

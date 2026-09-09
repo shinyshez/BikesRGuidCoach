@@ -191,7 +191,7 @@
             android:layout_height="wrap_content"
             android:text="Auto-record"
             android:textColor="@android:color/white"
-            android:checked="true" />
+            android:checked="false" />
     </LinearLayout>
 
 

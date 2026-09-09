@@ -119,7 +119,7 @@ as the final check on a PR; the local loop is for iteration.
 
 ### Main Recording Screen
 
-- **Auto-record Toggle**: Controls automatic rider detection and recording
+- **Auto-record Toggle**: Controls automatic rider detection and recording. Always off when the app opens (reset on every cold launch, kept across rotation); turn it on per session
 - **Large Record Button**: Manual recording with visual feedback (circle with dot → circle with square when recording)
 - **Status Display**: Shows monitoring status, detection confidence, and recording progress (hidden when auto-record is off)
 - **Navigation**: Gallery and Settings buttons positioned on either side of the record button

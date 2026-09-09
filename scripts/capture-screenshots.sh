@@ -88,6 +88,23 @@ done
 sleep 2
 
 adb logcat -c
+
+# Always leave logs behind, even when a step fails (the workflow uploads $OUT on failure
+# too), plus a screenshot of whatever was on screen at the time.
+dump_logs() {
+  local status=$?
+  if [ $status -ne 0 ]; then
+    echo "Capture failed with status $status; saving diagnostics"
+    adb exec-out screencap -p > "$OUT/99_failure.png" 2>/dev/null || true
+  fi
+  adb logcat -d -t 200 '*:E' > "$OUT/logcat_errors.txt" 2>/dev/null || true
+  adb logcat -d -t 100 DetectionTuning:* ActivityManager:* AndroidRuntime:* > "$OUT/logcat_activity.txt" 2>/dev/null || true
+  # A dead system_server ("No service published for: input") shows up here
+  adb logcat -d -b system -t 300 > "$OUT/logcat_system.txt" 2>/dev/null || true
+  adb logcat -d -b crash > "$OUT/logcat_crash.txt" 2>/dev/null || true
+}
+trap dump_logs EXIT
+
 adb shell am start -n "$PKG/.MainActivity"
 sleep 8
 
@@ -124,10 +141,6 @@ shot 06_settings_developer
 tap_by_attr text "Detection Tuning"
 sleep 5
 shot 07_detection_tuning
-
-# --- Logs ---------------------------------------------------------------------------
-adb logcat -d -t 200 '*:E' > "$OUT/logcat_errors.txt" || true
-adb logcat -d -t 100 DetectionTuning:* ActivityManager:* AndroidRuntime:* > "$OUT/logcat_activity.txt" || true
 
 echo "Captured screenshots:"
 ls -la "$OUT"

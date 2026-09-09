@@ -30,7 +30,7 @@ class SettingsManager(context: Context) {
         private const val DEFAULT_SOUND_FEEDBACK = false
         private const val DEFAULT_SHOW_POSE_OVERLAY = true
         private const val DEFAULT_DETECTOR_TYPE = "pose"
-        private const val DEFAULT_RIDER_DETECTION_ENABLED = true
+        private const val DEFAULT_RIDER_DETECTION_ENABLED = false
         private const val DEFAULT_MOTION_THRESHOLD = 30
         private const val DEFAULT_MIN_MOTION_AREA = 5000
         private const val DEFAULT_SHOW_MOTION_OVERLAY = true

@@ -126,7 +126,7 @@ class MainActivity : AppCompatActivity(),
             cameraExecutor = Executors.newSingleThreadExecutor()
             
             // Initialize new architecture components
-            initializeComponents()
+            initializeComponents(coldLaunch = savedInstanceState == null)
 
             Log.d(TAG, "App started successfully")
 
@@ -144,8 +144,12 @@ class MainActivity : AppCompatActivity(),
         }
     }
 
-    private fun initializeComponents() {
+    private fun initializeComponents(coldLaunch: Boolean) {
         settingsManager = SettingsManager(this)
+        // Auto-record is per session: the app always opens with it off so it never starts
+        // recording on its own. It can be turned on for the session from the toggle, the
+        // settings screen or the remote. (A rotation is not a cold launch and keeps it.)
+        if (coldLaunch) settingsManager.setRiderDetectionEnabled(false)
         cameraManager = CameraManager(this, this, cameraExecutor)
         recordingManager = RecordingManager(this, contentResolver)
         
