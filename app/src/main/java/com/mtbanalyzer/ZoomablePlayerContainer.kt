@@ -36,6 +36,13 @@ class ZoomablePlayerContainer @JvmOverloads constructor(
     
     // Scale gesture detector
     private val scaleGestureDetector: ScaleGestureDetector
+
+    /**
+     * Fired after a gesture changes the transform, with the view-size-independent form of it:
+     * scale, and translation as a fraction of the view's width/height. Not fired for
+     * [setNormalizedTransform] or [reset], so two containers can mirror each other.
+     */
+    var onTransformChanged: ((scale: Float, fractionX: Float, fractionY: Float) -> Unit)? = null
     
     companion object {
         private const val TAG = "ZoomablePlayerContainer"
@@ -58,6 +65,7 @@ class ZoomablePlayerContainer @JvmOverloads constructor(
                     currentScale = newScale
                     constrainMatrix()
                     invalidate()
+                    notifyTransformChanged()
                 }
                 
                 return true
@@ -99,6 +107,7 @@ class ZoomablePlayerContainer @JvmOverloads constructor(
                     matrix.postTranslate(dx, dy)
                     constrainMatrix()
                     invalidate()
+                    notifyTransformChanged()
                 }
             }
         }
@@ -189,6 +198,36 @@ class ZoomablePlayerContainer @JvmOverloads constructor(
     fun isZoomed(): Boolean = currentScale > 1.0f
     
     fun getCurrentScale(): Float = currentScale
+
+    /** Current transform as (scale, translateX / width, translateY / height). */
+    fun getNormalizedTransform(): FloatArray {
+        val values = FloatArray(9)
+        matrix.getValues(values)
+        val fx = if (width > 0) values[Matrix.MTRANS_X] / width else 0f
+        val fy = if (height > 0) values[Matrix.MTRANS_Y] / height else 0f
+        return floatArrayOf(currentScale, fx, fy)
+    }
+
+    /**
+     * Applies a transform produced by [getNormalizedTransform] on another container, so a
+     * pinch or pan on one clip can be mirrored on to a second one of any size. Silent: does
+     * not fire [onTransformChanged].
+     */
+    fun setNormalizedTransform(scale: Float, fractionX: Float, fractionY: Float) {
+        val clamped = scale.coerceIn(minScale, maxScale)
+        matrix.reset()
+        matrix.postScale(clamped, clamped)
+        matrix.postTranslate(fractionX * width, fractionY * height)
+        currentScale = clamped
+        constrainMatrix()
+        invalidate()
+    }
+
+    private fun notifyTransformChanged() {
+        val listener = onTransformChanged ?: return
+        val t = getNormalizedTransform()
+        listener(t[0], t[1], t[2])
+    }
     
     override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
         // Don't intercept - we'll handle events passed from VideoPlayerView

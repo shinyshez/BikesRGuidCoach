@@ -90,6 +90,17 @@ class VideoComparisonActivity : AppCompatActivity() {
         return true
     }
 
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
+        // Back leaves draw mode before it leaves the screen
+        if (videoPlayer1.isDrawingMode() || videoPlayer2.isDrawingMode()) {
+            videoPlayer1.exitDrawingMode()
+            videoPlayer2.exitDrawingMode()
+            return
+        }
+        super.onBackPressed()
+    }
+
     private fun initializeViews() {
         videoPlayer1 = findViewById(R.id.videoPlayer1)
         videoPlayer2 = findViewById(R.id.videoPlayer2)
@@ -152,6 +163,14 @@ class VideoComparisonActivity : AppCompatActivity() {
             // Tapping a clip selects it (meaningful while unlocked)
             videoPlayer1.setOnVideoTapListener { setActivePlayer(1) }
             videoPlayer2.setOnVideoTapListener { setActivePlayer(2) }
+
+            // Pinch / pan on a clip zooms the other one identically while locked
+            videoPlayer1.setOnZoomChangedListener { scale, fx, fy ->
+                if (isLocked) videoPlayer2.applyZoom(scale, fx, fy)
+            }
+            videoPlayer2.setOnZoomChangedListener { scale, fx, fy ->
+                if (isLocked) videoPlayer1.applyZoom(scale, fx, fy)
+            }
 
             // Hold-to-scrub inside a clip keeps the other clip in step while locked
             videoPlayer1.setOnScrubListener { position ->
@@ -323,6 +342,10 @@ class VideoComparisonActivity : AppCompatActivity() {
         if (isLocked) {
             // Freeze the current relationship between the clips
             positionOffset = videoPlayer2.getCurrentPosition() - videoPlayer1.getCurrentPosition()
+            // and carry the clip you were working on's zoom across to the other
+            val zoom = activeVideoPlayer().getZoom()
+            val other = if (activePlayer == 1) videoPlayer2 else videoPlayer1
+            other.applyZoom(zoom[0], zoom[1], zoom[2])
             if (anyPlaying()) {
                 videoPlayer1.play()
                 videoPlayer2.play()
