@@ -117,6 +117,11 @@
             android:title="Detection Tuning"
             android:summary="Test and tune detection algorithms using videos" />
 
+        <Preference
+            android:key="zoom_test"
+            android:title="Zoom Test"
+            android:summary="Exercise the pinch-to-zoom view on a still image" />
+
     </PreferenceCategory>
 
     <PreferenceCategory android:title="Storage"

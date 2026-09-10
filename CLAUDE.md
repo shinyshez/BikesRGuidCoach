@@ -119,10 +119,20 @@ as the final check on a PR; the local loop is for iteration.
 
 ### Main Recording Screen
 
-- **Auto-record Toggle**: Controls automatic rider detection and recording. Always off when the app opens (reset on every cold launch, kept across rotation); turn it on per session
-- **Large Record Button**: Manual recording with visual feedback (circle with dot → circle with square when recording)
-- **Status Display**: Shows monitoring status, detection confidence, and recording progress (hidden when auto-record is off)
-- **Navigation**: Gallery and Settings buttons positioned on either side of the record button
+Chrome is gradients only, no panels, so the preview stays readable edge to edge.
+
+- **Mode pill** (top centre): `Manual | Auto`. Always Manual when the app opens (reset on
+  every cold launch, kept across rotation); Auto arms rider detection for the session. The
+  Settings switch and the remote's volume-down drive the same state
+- **Status chip** under the pill, one line at a time: amber "Watching for a rider", green
+  "Rider in frame", red "REC 0:03 / 0:08" while recording, then "Saved" for 2s. Hidden in
+  Manual mode unless a recording is running. A 2dp red progress line runs along the bottom
+  edge while recording, as in playback
+- **Today's clips** strip above the record button (newest first, tap to play). Clips recorded
+  since the screen opened carry a NEW tag. Hidden until there is a clip
+- **Bottom row**: Gallery, Record (becomes Stop while recording), Settings. The Zoom Test
+  developer screen lives under Settings › Developer
+- Detection confidence is not shown on the capture screen; it is in the performance overlay
 
 ### Video Playback
 

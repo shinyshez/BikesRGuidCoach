@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/clipRoot"
+    android:layout_width="56dp"
+    android:layout_height="100dp"
+    android:layout_marginEnd="8dp"
+    android:background="@drawable/clip_thumb_background"
+    android:clipToOutline="true"
+    android:foreground="?android:attr/selectableItemBackground"
+    android:contentDescription="Recent clip">
+
+    <ImageView
+        android:id="@+id/clipThumbnail"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop"
+        android:importantForAccessibility="no" />
+
+    <TextView
+        android:id="@+id/clipNewTag"
+        android:layout_width="wrap_content"
+        android:layout_height="18dp"
+        android:layout_margin="6dp"
+        android:paddingStart="6dp"
+        android:paddingEnd="6dp"
+        android:gravity="center"
+        android:background="@drawable/new_tag_background"
+        android:text="NEW"
+        android:textColor="@android:color/white"
+        android:textSize="10sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/clipDuration"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_margin="6dp"
+        android:paddingStart="5dp"
+        android:paddingEnd="5dp"
+        android:paddingTop="1dp"
+        android:paddingBottom="1dp"
+        android:background="@drawable/duration_tag_background"
+        android:text="0:08"
+        android:textColor="@android:color/white"
+        android:textSize="11sp" />
+
+</FrameLayout>
