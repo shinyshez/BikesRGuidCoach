@@ -151,7 +151,12 @@ bottom edge. All of it lives in `VideoPlayerView` (`view_video_player.xml`).
 
 ### Video Gallery
 
-The video gallery displays all recorded MTB videos with the following features:
+Dark 9:16 tiles (3 across in portrait, 5 in landscape), cropped so the rider fills the tile,
+grouped under a header per day ("Today · 2 clips"). Each tile shows time of day and
+duration; clips that came in via import carry a small `import` tag (recordings are named
+`MTB_yyyy-MM-dd-HH-mm-ss-SSS.mp4`, anything else is an import). Bottom: an outline Import
+circle and a "Compare" pill over a gradient, the same vocabulary as the capture screen.
+`GalleryAdapter` builds the header/clip rows; headers span the full grid width and never swipe.
 
 #### Where videos live, and surviving reinstalls
 Recordings and imports are MediaStore rows in `Movies/MTBAnalyzer` named `MTB_…`; the
@@ -175,10 +180,12 @@ consent dialog (`MediaStore.createDeleteRequest`).
 - **Swipe Left/Right**: Delete video with confirmation dialog
 
 #### Compare Mode
-- Select up to 2 videos for side-by-side comparison
-- Long press any video to enter compare mode
-- Tap additional videos to select for comparison
-- Use "Compare" button when 2 videos are selected
+- Long-press a clip (it becomes pick 1) or tap the Compare pill to start; a header with a
+  close button replaces the Import control
+- Every tile shows an empty ring; picks show their number. Pick 1 is the left clip in the
+  comparison and the offset is clip 2 relative to clip 1
+- Once two are picked the other tiles dim and the pill turns white; before that it reads
+  "Compare · N of 2". Tap a pick again to drop it; Back or the close button leaves the mode
 
 #### Comparison Screen
 - Clips sit **side by side in both orientations** (portrait clips fit two across)
@@ -194,7 +201,8 @@ consent dialog (`MediaStore.createDeleteRequest`).
 
 #### Delete Functionality
 - Swipe any video thumbnail left or right to reveal delete action
-- Visual feedback shows red background with trash icon during swipe
+- Visual feedback shows a rounded red panel with a bin behind the tile during swipe; the
+  confirmation uses the dark AppCompat dialog
 - Requires 30% swipe threshold to trigger confirmation dialog
 - Confirmation dialog prevents accidental deletions
 - Swipe gestures are disabled during compare mode

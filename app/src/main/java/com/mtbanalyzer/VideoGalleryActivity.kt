@@ -7,18 +7,15 @@ import android.content.res.Configuration
 import android.database.Cursor
 import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.drawable.ColorDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
 import android.util.Log
 import android.view.DragEvent
-import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
-import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
@@ -26,9 +23,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.RecyclerView
-import com.bumptech.glide.Glide
-import com.bumptech.glide.request.RequestOptions
-import java.text.SimpleDateFormat
 import java.util.*
 import android.app.Activity
 import android.app.RecoverableSecurityException
@@ -55,14 +49,16 @@ class VideoGalleryActivity : AppCompatActivity() {
     
     private lateinit var recyclerView: RecyclerView
     private lateinit var emptyView: TextView
-    private lateinit var adapter: VideoAdapter
-    private lateinit var compareButton: com.google.android.material.floatingactionbutton.FloatingActionButton
-    private lateinit var cancelCompareButton: android.widget.Button
+    private lateinit var adapter: GalleryAdapter
+    private lateinit var compareButton: android.widget.TextView
+    private lateinit var cancelCompareButton: android.widget.ImageButton
+    private lateinit var compareHeader: View
+    private lateinit var bottomControls: android.widget.LinearLayout
     private val videos = mutableListOf<VideoItem>()
     private val selectedVideos = mutableListOf<VideoItem>()
     private var isCompareMode = false
     private lateinit var itemTouchHelper: ItemTouchHelper
-    private lateinit var importButton: com.google.android.material.floatingactionbutton.FloatingActionButton
+    private lateinit var importButton: android.widget.ImageButton
     private lateinit var importer: VideoImporter
     private var readPermissionDenied = false
 
@@ -130,7 +126,7 @@ class VideoGalleryActivity : AppCompatActivity() {
     }
 
     private fun importVideos(uris: List<Uri>) {
-        val dialog = AlertDialog.Builder(this)
+        val dialog = AlertDialog.Builder(this, androidx.appcompat.R.style.Theme_AppCompat_Dialog_Alert)
             .setTitle("Importing")
             .setMessage("Importing 1 of ${uris.size}…")
             .setCancelable(false)
@@ -162,7 +158,7 @@ class VideoGalleryActivity : AppCompatActivity() {
     override fun onBackPressed() {
         if (isCompareMode) {
             // Exit compare mode instead of closing activity
-            exitCompareMode(findViewById(R.id.compareControls))
+            exitCompareMode()
         } else {
             super.onBackPressed()
         }
@@ -175,23 +171,32 @@ class VideoGalleryActivity : AppCompatActivity() {
         val newColumnCount = getColumnCount()
         val layoutManager = recyclerView.layoutManager as GridLayoutManager
         layoutManager.spanCount = newColumnCount
+        layoutManager.spanSizeLookup = headerSpanLookup(newColumnCount)
         
         Log.d(TAG, "Orientation changed - using $newColumnCount columns")
     }
     
     private fun getColumnCount(): Int {
         return when (resources.configuration.orientation) {
-            Configuration.ORIENTATION_LANDSCAPE -> 3  // More columns in landscape
-            Configuration.ORIENTATION_PORTRAIT -> 2   // Standard columns in portrait
-            else -> 2  // Default fallback
+            Configuration.ORIENTATION_LANDSCAPE -> 5  // Portrait tiles are narrow; five fit across
+            Configuration.ORIENTATION_PORTRAIT -> 3
+            else -> 3
         }
     }
     
+    private fun headerSpanLookup(columns: Int) = object : GridLayoutManager.SpanSizeLookup() {
+        override fun getSpanSize(position: Int) =
+            if (adapter.getItemViewType(position) == GalleryAdapter.TYPE_HEADER) columns else 1
+    }
+
     private fun setupUI() {
         recyclerView = findViewById(R.id.recycler_view)
         emptyView = findViewById(R.id.empty_view)
         compareButton = findViewById(R.id.compareButton)
         importButton = findViewById(R.id.importButton)
+        compareHeader = findViewById(R.id.compareHeader)
+        bottomControls = findViewById(R.id.bottomControls)
+        cancelCompareButton = findViewById(R.id.cancelCompareButton)
         importButton.setOnClickListener {
             pickVideos.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly))
         }
@@ -199,51 +204,38 @@ class VideoGalleryActivity : AppCompatActivity() {
         emptyView.setOnClickListener {
             if (readPermissionDenied) requestReadPermission.launch(MediaPermissions.readVideoPermission())
         }
-        cancelCompareButton = findViewById(R.id.cancelCompareButton)
-        val startCompareButton = findViewById<android.widget.Button>(R.id.startCompareButton)
-        val compareControls = findViewById<android.view.View>(R.id.compareControls)
-        val compareInstructions = findViewById<android.widget.TextView>(R.id.compareInstructions)
-        
-        adapter = VideoAdapter(videos, isCompareMode, selectedVideos,
-            onVideoClick = { videoItem, isSelected ->
+
+        adapter = GalleryAdapter(selectedVideos,
+            onVideoClick = { videoItem ->
                 if (isCompareMode) {
-                    handleVideoSelection(videoItem, isSelected, startCompareButton, compareInstructions)
+                    handleVideoSelection(videoItem, !selectedVideos.contains(videoItem))
                 } else {
                     playVideo(videoItem.uri)
                 }
             },
             onVideoLongClick = { videoItem ->
-                if (!isCompareMode) {
-                    // Enter compare mode and select the long-pressed video
-                    enterCompareMode(compareControls)
-                    handleVideoSelection(videoItem, true, startCompareButton, compareInstructions)
-                    Toast.makeText(this, "Compare mode: Tap another video to compare", Toast.LENGTH_SHORT).show()
-                }
+                // Long-press starts compare mode with this clip as pick 1
+                enterCompareMode()
+                handleVideoSelection(videoItem, true)
             }
         )
-        
-        // Set column count based on orientation
+
         val columnCount = getColumnCount()
-        recyclerView.layoutManager = GridLayoutManager(this, columnCount)
+        recyclerView.layoutManager = GridLayoutManager(this, columnCount).apply {
+            spanSizeLookup = headerSpanLookup(columnCount)
+        }
         recyclerView.adapter = adapter
-        
-        // Setup compare mode controls
+
+        // The pill starts compare mode, then launches the comparison once two are picked
         compareButton.setOnClickListener {
-            enterCompareMode(compareControls)
+            if (!isCompareMode) enterCompareMode() else if (selectedVideos.size == 2) startVideoComparison()
         }
-        
-        cancelCompareButton.setOnClickListener {
-            exitCompareMode(compareControls)
-        }
-        
-        startCompareButton.setOnClickListener {
-            startVideoComparison()
-        }
-        
+        cancelCompareButton.setOnClickListener { exitCompareMode() }
+
         // Setup swipe to delete
         setupDragAndDrop()
     }
-    
+
     private fun loadVideos() {
         val projection = arrayOf(
             MediaStore.Video.Media._ID,
@@ -315,7 +307,7 @@ class VideoGalleryActivity : AppCompatActivity() {
         } else {
             recyclerView.visibility = View.VISIBLE
             emptyView.visibility = View.GONE
-            adapter.notifyDataSetChanged()
+            adapter.submit(videos)
         }
     }
     
@@ -352,52 +344,61 @@ class VideoGalleryActivity : AppCompatActivity() {
         }
     }
     
-    private fun enterCompareMode(compareControls: android.view.View) {
+    private fun enterCompareMode() {
         isCompareMode = true
         selectedVideos.clear()
-        compareControls.visibility = android.view.View.VISIBLE
-        compareButton.visibility = android.view.View.GONE
+        compareHeader.visibility = View.VISIBLE
+        importButton.visibility = View.GONE
+        bottomControls.gravity = android.view.Gravity.CENTER
         adapter.updateCompareMode(true)
-        supportActionBar?.title = "Select Videos to Compare"
+        updateComparePill()
     }
-    
-    private fun exitCompareMode(compareControls: android.view.View) {
+
+    private fun exitCompareMode() {
         isCompareMode = false
         selectedVideos.clear()
-        compareControls.visibility = android.view.View.GONE
-        compareButton.visibility = android.view.View.VISIBLE
+        compareHeader.visibility = View.GONE
+        importButton.visibility = View.VISIBLE
+        bottomControls.gravity = android.view.Gravity.CENTER_VERTICAL or android.view.Gravity.END
         adapter.updateCompareMode(false)
-        supportActionBar?.title = "Video Gallery"
+        updateComparePill()
     }
-    
-    private fun handleVideoSelection(videoItem: VideoItem, isSelected: Boolean, startCompareButton: android.widget.Button, compareInstructions: android.widget.TextView) {
+
+    private fun handleVideoSelection(videoItem: VideoItem, isSelected: Boolean) {
         if (isSelected) {
-            if (selectedVideos.size < 2 && !selectedVideos.contains(videoItem)) {
-                selectedVideos.add(videoItem)
-            }
+            if (selectedVideos.size < 2 && !selectedVideos.contains(videoItem)) selectedVideos.add(videoItem)
         } else {
             selectedVideos.remove(videoItem)
         }
-        
-        // Update UI based on selection count
-        when (selectedVideos.size) {
-            0 -> {
-                compareInstructions.text = "Select 2 videos to compare"
-                startCompareButton.isEnabled = false
-            }
-            1 -> {
-                compareInstructions.text = "Select 1 more video"
-                startCompareButton.isEnabled = false
-            }
-            2 -> {
-                compareInstructions.text = "Ready to compare!"
-                startCompareButton.isEnabled = true
-            }
-        }
-        
+        updateComparePill()
         adapter.notifyDataSetChanged()
     }
-    
+
+    /** Outline "Compare" normally; "Compare · N of 2" while picking; white once two are picked. */
+    private fun updateComparePill() {
+        val white = 0xFFFFFFFF.toInt()
+        when {
+            !isCompareMode -> {
+                compareButton.text = "Compare"
+                compareButton.setBackgroundResource(R.drawable.mode_pill_background)
+                compareButton.setTextColor(white)
+                compareButton.compoundDrawableTintList = android.content.res.ColorStateList.valueOf(white)
+            }
+            selectedVideos.size < 2 -> {
+                compareButton.text = "Compare · ${selectedVideos.size} of 2"
+                compareButton.setBackgroundResource(R.drawable.pill_disabled_background)
+                compareButton.setTextColor(0xFF777777.toInt())
+                compareButton.compoundDrawableTintList = android.content.res.ColorStateList.valueOf(0xFF777777.toInt())
+            }
+            else -> {
+                compareButton.text = "Compare"
+                compareButton.setBackgroundResource(R.drawable.pill_primary_background)
+                compareButton.setTextColor(0xFF000000.toInt())
+                compareButton.compoundDrawableTintList = android.content.res.ColorStateList.valueOf(0xFF000000.toInt())
+            }
+        }
+    }
+
     private fun startVideoComparison() {
         if (selectedVideos.size == 2) {
             val intent = Intent(this, VideoComparisonActivity::class.java).apply {
@@ -409,7 +410,7 @@ class VideoGalleryActivity : AppCompatActivity() {
             startActivity(intent)
             
             // Exit compare mode after starting comparison
-            exitCompareMode(findViewById(R.id.compareControls))
+            exitCompareMode()
         }
     }
 
@@ -432,10 +433,12 @@ class VideoGalleryActivity : AppCompatActivity() {
 
             override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {
                 val position = viewHolder.adapterPosition
-                if (position != RecyclerView.NO_POSITION && position < videos.size) {
-                    val video = videos[position]
+                val video = if (position != RecyclerView.NO_POSITION) adapter.clipAt(position) else null
+                if (video != null) {
                     // Show confirmation dialog and restore item position if cancelled
                     showDeleteConfirmation(video, position)
+                } else if (position != RecyclerView.NO_POSITION) {
+                    adapter.notifyItemChanged(position)
                 }
             }
 
@@ -443,6 +446,7 @@ class VideoGalleryActivity : AppCompatActivity() {
                 recyclerView: RecyclerView,
                 viewHolder: RecyclerView.ViewHolder
             ): Int {
+                if (viewHolder is GalleryAdapter.HeaderHolder) return 0
                 // Only enable swipe when not in compare mode
                 return if (!isCompareMode) {
                     makeMovementFlags(0, ItemTouchHelper.LEFT or ItemTouchHelper.RIGHT)
@@ -461,27 +465,18 @@ class VideoGalleryActivity : AppCompatActivity() {
                 isCurrentlyActive: Boolean
             ) {
                 val itemView = viewHolder.itemView
-                val background = ColorDrawable()
-                
-                if (dX > 0) { // Swiping right
-                    background.color = Color.parseColor("#FF4444")
-                    background.setBounds(
-                        itemView.left,
-                        itemView.top,
-                        itemView.left + dX.toInt(),
-                        itemView.bottom
-                    )
-                } else if (dX < 0) { // Swiping left
-                    background.color = Color.parseColor("#FF4444")
-                    background.setBounds(
-                        itemView.right + dX.toInt(),
-                        itemView.top,
-                        itemView.right,
-                        itemView.bottom
+                val inset = 4 * resources.displayMetrics.density
+                val radius = 10 * resources.displayMetrics.density
+                val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.parseColor("#FF4444")
+                }
+                if (dX != 0f) {
+                    c.drawRoundRect(
+                        itemView.left + inset, itemView.top + inset,
+                        itemView.right - inset, itemView.bottom - inset,
+                        radius, radius, paint
                     )
                 }
-                
-                background.draw(c)
                 
                 // Draw delete icon
                 val deleteIcon = androidx.core.content.ContextCompat.getDrawable(
@@ -519,9 +514,9 @@ class VideoGalleryActivity : AppCompatActivity() {
     }
     
     private fun showDeleteConfirmation(video: VideoItem, position: Int) {
-        AlertDialog.Builder(this)
-            .setTitle("Delete Video")
-            .setMessage("Are you sure you want to delete '${video.displayName}'?")
+        AlertDialog.Builder(this, androidx.appcompat.R.style.Theme_AppCompat_Dialog_Alert)
+            .setTitle("Delete clip?")
+            .setMessage("${video.displayName.removePrefix("MTB_").removeSuffix(".mp4")} will be removed from the phone.")
             .setPositiveButton("Delete") { _, _ ->
                 deleteVideo(video)
             }
@@ -564,104 +559,5 @@ class VideoGalleryActivity : AppCompatActivity() {
             Log.e(TAG, "Error deleting video", e)
             Toast.makeText(this, "Error deleting video: ${e.message}", Toast.LENGTH_SHORT).show()
         }
-    }
-}
-
-class VideoAdapter(
-    private val videos: List<VideoItem>,
-    private var isCompareMode: Boolean,
-    private val selectedVideos: MutableList<VideoItem>,
-    private val onVideoClick: (VideoItem, Boolean) -> Unit,
-    private val onVideoLongClick: (VideoItem) -> Unit
-) : RecyclerView.Adapter<VideoAdapter.VideoViewHolder>() {
-    
-    class VideoViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-        val thumbnail: ImageView = view.findViewById(R.id.video_thumbnail)
-        val title: TextView = view.findViewById(R.id.video_title)
-        val duration: TextView = view.findViewById(R.id.video_duration)
-        val date: TextView = view.findViewById(R.id.video_date)
-        val selectionOverlay: View = view.findViewById(R.id.selectionOverlay)
-        val selectionCheckbox: android.widget.CheckBox = view.findViewById(R.id.selectionCheckbox)
-    }
-    
-    fun updateCompareMode(compareMode: Boolean) {
-        isCompareMode = compareMode
-        notifyDataSetChanged()
-    }
-    
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VideoViewHolder {
-        val view = LayoutInflater.from(parent.context)
-            .inflate(R.layout.item_video, parent, false)
-        return VideoViewHolder(view)
-    }
-    
-    override fun onBindViewHolder(holder: VideoViewHolder, position: Int) {
-        val video = videos[position]
-        
-        holder.title.text = video.displayName.replace("MTB_", "").replace(".mp4", "")
-        holder.duration.text = formatDuration(video.duration)
-        holder.date.text = formatDate(video.dateAdded)
-        
-        // Load video thumbnail using Glide
-        Glide.with(holder.itemView.context)
-            .load(video.uri)
-            .apply(RequestOptions()
-                .fitCenter()
-                .placeholder(R.mipmap.ic_launcher)
-                .error(R.mipmap.ic_launcher))
-            .into(holder.thumbnail)
-        
-        // Handle compare mode UI
-        if (isCompareMode) {
-            holder.selectionCheckbox.visibility = View.VISIBLE
-            val isSelected = selectedVideos.contains(video)
-            holder.selectionCheckbox.isChecked = isSelected
-            holder.selectionOverlay.visibility = if (isSelected) View.VISIBLE else View.GONE
-            
-            // Disable selection if 2 videos already selected and this isn't one of them
-            val canSelect = selectedVideos.size < 2 || selectedVideos.contains(video)
-            holder.selectionCheckbox.isEnabled = canSelect
-            holder.itemView.alpha = if (canSelect) 1.0f else 0.5f
-            
-            holder.itemView.setOnClickListener {
-                if (canSelect) {
-                    val newSelectionState = !selectedVideos.contains(video)
-                    onVideoClick(video, newSelectionState)
-                }
-            }
-            
-            holder.selectionCheckbox.setOnClickListener {
-                if (canSelect) {
-                    val newSelectionState = holder.selectionCheckbox.isChecked
-                    onVideoClick(video, newSelectionState)
-                }
-            }
-        } else {
-            holder.selectionCheckbox.visibility = View.GONE
-            holder.selectionOverlay.visibility = View.GONE
-            holder.itemView.alpha = 1.0f
-            
-            holder.itemView.setOnClickListener {
-                onVideoClick(video, false) // isSelected not used in normal mode
-            }
-            
-            holder.itemView.setOnLongClickListener {
-                onVideoLongClick(video)
-                true // Consume the long click event
-            }
-        }
-    }
-    
-    override fun getItemCount() = videos.size
-    
-    private fun formatDuration(durationMs: Long): String {
-        val seconds = (durationMs / 1000) % 60
-        val minutes = (durationMs / (1000 * 60)) % 60
-        return String.format("%d:%02d", minutes, seconds)
-    }
-    
-    private fun formatDate(timestamp: Long): String {
-        val date = Date(timestamp * 1000) // MediaStore timestamp is in seconds
-        return SimpleDateFormat("MMM dd, HH:mm", Locale.getDefault()).format(date)
     }
 }
