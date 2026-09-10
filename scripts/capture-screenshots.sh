@@ -81,7 +81,7 @@ tap_by_attr() {
 
 # dump_ui <name>: save the current UI hierarchy alongside the screenshots for debugging.
 dump_ui() {
-  adb shell uiautomator dump /sdcard/ui_dump.xml > /dev/null || true
+  ui_dump /sdcard/ui_dump.xml || true
   adb pull /sdcard/ui_dump.xml "$OUT/$1.xml" > /dev/null || true
 }
 
