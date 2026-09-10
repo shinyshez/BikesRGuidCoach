@@ -8,223 +8,219 @@
     android:background="@android:color/black"
     tools:context=".MainActivity">
 
-    <!-- Full-screen Camera Preview -->
+    <!-- Full-screen camera preview -->
     <androidx.camera.view.PreviewView
         android:id="@+id/viewFinder"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         app:scaleType="fillCenter" />
     
-    <!-- Full-screen Pose Overlay -->
+    <!-- Full-screen pose overlay -->
     <com.mtbanalyzer.GraphicOverlay
         android:id="@+id/graphicOverlay"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <!-- Bottom Control Panel Overlay -->
-    <LinearLayout
-        android:id="@+id/controlPanel"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:gravity="center"
-        android:background="#B3000000"
-        android:padding="16dp"
+    <!-- Chrome is gradients only, no panels: the preview stays readable edge to edge -->
+    <View
+        android:layout_width="0dp"
+        android:layout_height="120dp"
+        android:background="@drawable/controls_gradient_top"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <View
+        android:id="@+id/bottomGradient"
+        android:layout_width="0dp"
+        android:layout_height="290dp"
+        android:background="@drawable/controls_gradient_bottom"
         app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- Mode: Manual | Auto. The first decision on the screen, so it sits top-centre -->
+    <LinearLayout
+        android:id="@+id/modeToggle"
+        android:layout_width="wrap_content"
+        android:layout_height="44dp"
+        android:layout_marginTop="14dp"
+        android:orientation="horizontal"
+        android:padding="3dp"
+        android:background="@drawable/mode_pill_background"
+        app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <!-- Status Display -->
-        <LinearLayout
-            android:id="@+id/statusContainer"
+        <TextView
+            android:id="@+id/modeManual"
             android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:paddingStart="18dp"
+            android:paddingEnd="18dp"
+            android:text="Manual"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:textColor="@android:color/black"
+            android:background="@drawable/mode_segment_selected"
+            android:contentDescription="Manual mode" />
+
+        <TextView
+            android:id="@+id/modeAuto"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:layout_marginStart="2dp"
+            android:gravity="center"
+            android:paddingStart="18dp"
+            android:paddingEnd="18dp"
+            android:text="Auto"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:textColor="#DDDDDD"
+            android:contentDescription="Auto-record mode" />
+
+    </LinearLayout>
+
+    <!-- One status chip under the mode pill: watching / rider in frame / REC 0:03 / saved -->
+    <LinearLayout
+        android:id="@+id/statusChip"
+        android:layout_width="wrap_content"
+        android:layout_height="28dp"
+        android:layout_marginTop="10dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="10dp"
+        android:paddingEnd="10dp"
+        android:background="@drawable/badge_background"
+        android:visibility="gone"
+        app:layout_constraintTop_toBottomOf="@id/modeToggle"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <View
+            android:id="@+id/statusDot"
+            android:layout_width="8dp"
+            android:layout_height="8dp"
+            android:layout_marginEnd="7dp"
+            android:background="@drawable/circle_indicator"
+            android:backgroundTint="@android:color/holo_orange_light" />
+
+        <TextView
+            android:id="@+id/statusText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Watching for a rider"
+            android:textColor="@android:color/white"
+            android:textSize="12sp"
+            android:singleLine="true"
+            android:ellipsize="end"
+            android:maxWidth="260dp" />
+
+    </LinearLayout>
+
+    <!-- Today's clips, straight from the camera. Hidden until there is one -->
+    <LinearLayout
+        android:id="@+id/recentClipsContainer"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="24dp"
+        android:orientation="vertical"
+        android:visibility="gone"
+        app:layout_constraintBottom_toTopOf="@id/recordButton"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:layout_marginBottom="8dp">
-            
-            <FrameLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginEnd="12dp">
-                
-                <View
-                    android:id="@+id/statusIndicator"
-                    android:layout_width="24dp"
-                    android:layout_height="24dp"
-                    android:background="@drawable/circle_indicator"
-                    android:backgroundTint="@android:color/holo_orange_light" />
-                    
-                <!-- Pulse animation ring for rider detection -->
-                <View
-                    android:id="@+id/pulseRing"
-                    android:layout_width="36dp"
-                    android:layout_height="36dp"
-                    android:layout_gravity="center"
-                    android:background="@drawable/circle_indicator"
-                    android:backgroundTint="@android:color/holo_green_light"
-                    android:alpha="0.3"
-                    android:visibility="gone" />
-            </FrameLayout>
-            
-            <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:orientation="vertical">
-                
-                <TextView
-                    android:id="@+id/statusText"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Monitoring"
-                    android:textColor="@android:color/white"
-                    android:textSize="16sp"
-                    android:textStyle="bold" />
-                    
-                <TextView
-                    android:id="@+id/confidenceText"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text=""
-                    android:textColor="@android:color/holo_green_light"
-                    android:textSize="12sp" />
-            </LinearLayout>
-        </LinearLayout>
-        
-        <TextView
-            android:id="@+id/recordingStatus"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Waiting for rider..."
-            android:textColor="@android:color/white"
-            android:textSize="14sp"
-            android:layout_marginBottom="8dp"
-            android:gravity="center" />
-            
-        <ProgressBar
-            android:id="@+id/recordingProgress"
-            style="?android:attr/progressBarStyleHorizontal"
-            android:layout_width="150dp"
-            android:layout_height="6dp"
-            android:layout_marginBottom="16dp"
-            android:max="100"
-            android:progress="0"
-            android:progressTint="@android:color/holo_red_light"
-            android:visibility="gone" />
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="8dp">
 
-        <!-- Action Buttons Row -->
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Today"
+                android:textColor="@android:color/white"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/clipCountText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="0 clips"
+                android:textColor="#BBBBBB"
+                android:textSize="12sp" />
+
+        </LinearLayout>
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recentClipsList"
+            android:layout_width="match_parent"
+            android:layout_height="100dp"
+            android:paddingStart="16dp"
+            android:paddingEnd="8dp"
+            android:clipToPadding="false"
             android:orientation="horizontal"
-            android:gravity="center"
-            android:layout_marginBottom="12dp">
-            
-            <ImageButton
-                android:id="@+id/galleryButton"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:layout_marginEnd="24dp"
-                android:background="?android:attr/selectableItemBackgroundBorderless"
-                android:src="@android:drawable/ic_menu_gallery"
-                app:tint="@android:color/white"
-                android:contentDescription="Gallery" />
-            
-            <ImageButton
-                android:id="@+id/testRecordButton"
-                android:layout_width="72dp"
-                android:layout_height="72dp"
-                android:background="?android:attr/selectableItemBackgroundBorderless"
-                android:src="@drawable/ic_record"
-                android:contentDescription="Manual Record" />
-                
-            <ImageButton
-                android:id="@+id/settingsButton"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:layout_marginStart="24dp"
-                android:background="?android:attr/selectableItemBackgroundBorderless"
-                android:src="@android:drawable/ic_menu_preferences"
-                app:tint="@android:color/white"
-                android:contentDescription="Settings" />
-                
-            <ImageButton
-                android:id="@+id/zoomTestButton"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:layout_marginStart="12dp"
-                android:background="?android:attr/selectableItemBackgroundBorderless"
-                android:src="@android:drawable/ic_menu_zoom"
-                app:tint="@android:color/white"
-                android:contentDescription="Zoom Test" />
-        </LinearLayout>
-        
-        <!-- Video Count -->
-        <TextView
-            android:id="@+id/segmentCount"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="0 videos recorded today"
-            android:textColor="@android:color/holo_green_light"
-            android:textSize="14sp"
-            android:gravity="center" />
+            app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
 
     </LinearLayout>
 
-    
-    <!-- Top Right: Controls -->
-    <LinearLayout
-        android:id="@+id/topRightControls"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:background="#B3000000"
-        android:padding="12dp"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        android:layout_margin="8dp">
-        
-        <androidx.appcompat.widget.SwitchCompat
-            android:id="@+id/detectionToggle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Auto-record"
-            android:textColor="@android:color/white"
-            android:checked="false" />
-    </LinearLayout>
-
-
-    <!-- Recording Indicator Overlay -->
-    <LinearLayout
-        android:id="@+id/recordingOverlay"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:background="#E6000000"
-        android:padding="16dp"
-        android:visibility="gone"
-        app:layout_constraintTop_toTopOf="parent"
+    <!-- Bottom row: Gallery, Record (becomes Stop), Settings -->
+    <ImageButton
+        android:id="@+id/recordButton"
+        android:layout_width="72dp"
+        android:layout_height="72dp"
+        android:layout_marginBottom="28dp"
+        android:background="?android:attr/selectableItemBackgroundBorderless"
+        android:src="@drawable/ic_record"
+        android:contentDescription="Record"
+        app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginTop="80dp">
-        
-        <View
-            android:id="@+id/recordingDot"
-            android:layout_width="16dp"
-            android:layout_height="16dp"
-            android:background="@drawable/circle_indicator"
-            android:backgroundTint="@android:color/holo_red_light"
-            android:layout_marginEnd="12dp" />
-            
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="RECORDING"
-            android:textColor="@android:color/white"
-            android:textSize="18sp"
-            android:textStyle="bold" />
-    </LinearLayout>
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <ImageButton
+        android:id="@+id/galleryButton"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_marginEnd="44dp"
+        android:background="@drawable/button_circle_background"
+        android:src="@drawable/ic_gallery"
+        android:contentDescription="Gallery"
+        app:layout_constraintTop_toTopOf="@id/recordButton"
+        app:layout_constraintBottom_toBottomOf="@id/recordButton"
+        app:layout_constraintEnd_toStartOf="@id/recordButton" />
+
+    <ImageButton
+        android:id="@+id/settingsButton"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_marginStart="44dp"
+        android:background="@drawable/button_circle_background"
+        android:src="@drawable/ic_settings"
+        android:contentDescription="Settings"
+        app:layout_constraintTop_toTopOf="@id/recordButton"
+        app:layout_constraintBottom_toBottomOf="@id/recordButton"
+        app:layout_constraintStart_toEndOf="@id/recordButton" />
+
+    <!-- 2dp recording progress line along the bottom edge, as in playback -->
+    <ProgressBar
+        android:id="@+id/recordingProgress"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="0dp"
+        android:layout_height="2dp"
+        android:max="100"
+        android:progress="0"
+        android:progressTint="@android:color/holo_red_light"
+        android:progressBackgroundTint="#40FFFFFF"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

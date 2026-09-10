@@ -82,7 +82,7 @@ back() { adb shell input keyevent KEYCODE_BACK; sleep 2; }
 # --- Install and launch ---------------------------------------------------------
 adb uninstall "$PKG" > /dev/null 2>&1 || true
 adb install "$APK"
-for perm in CAMERA RECORD_AUDIO WRITE_EXTERNAL_STORAGE READ_EXTERNAL_STORAGE; do
+for perm in CAMERA RECORD_AUDIO WRITE_EXTERNAL_STORAGE READ_EXTERNAL_STORAGE READ_MEDIA_VIDEO; do
   adb shell pm grant "$PKG" "android.permission.$perm" > /dev/null 2>&1 || true
 done
 sleep 2
@@ -122,12 +122,13 @@ back
 tap_by_attr content-desc Settings
 sleep 3
 shot 03_settings
-back
 
-# --- Zoom test --------------------------------------------------------------------
-tap_by_attr content-desc "Zoom Test"
+# --- Zoom test (Settings > Developer) --------------------------------------------
+scroll_to text "Zoom Test" 8 > /dev/null
+tap_by_attr text "Zoom Test"
 sleep 3
 shot 04_zoom
+back
 back
 shot 05_main_final
 

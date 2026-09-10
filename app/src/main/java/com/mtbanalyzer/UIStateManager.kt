@@ -2,24 +2,25 @@ package com.mtbanalyzer
 
 import android.content.Context
 import android.view.View
+import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 
+/**
+ * Drives the capture screen's one status chip and the recording progress line.
+ *
+ * The chip says a single thing at a time: "Watching for a rider" (amber) while auto-record
+ * is armed, "Rider in frame" (green), "REC 0:03 / 0:08" (red) while recording, then a
+ * brief "Saved" or error. In manual mode it stays hidden unless a recording is in progress.
+ */
 class UIStateManager(
     private val context: Context,
-    private val statusIndicator: View,
+    private val statusChip: View,
+    private val statusDot: View,
     private val statusText: TextView,
-    private val recordingStatus: TextView,
-    private val recordingOverlay: View,
-    private val confidenceText: TextView? = null,
-    private val pulseRing: View? = null,
-    private val recordingProgress: android.widget.ProgressBar? = null,
-    private val recordingDot: View? = null
+    private val recordingProgress: ProgressBar
 ) {
     private val settingsManager = SettingsManager(context)
-    companion object {
-        private const val TAG = "UIStateManager"
-    }
 
     enum class AppState {
         MONITORING,
@@ -30,196 +31,100 @@ class UIStateManager(
     }
 
     private var currentState = AppState.MONITORING
-    private var lastConfidence = 0.0
+    private var autoMode = false
+
+    /** Whether auto-record is armed; decides if the idle chip shows at all. */
+    fun setAutoMode(enabled: Boolean) {
+        autoMode = enabled
+        if (currentState == AppState.MONITORING || currentState == AppState.RIDER_DETECTED) {
+            showIdle(riderDetected = currentState == AppState.RIDER_DETECTED)
+        }
+    }
 
     fun updateDetectionState(riderDetected: Boolean, confidence: Double, isRecording: Boolean) {
-        if (isRecording) {
-            // Don't update detection state while recording
+        if (isRecording || currentState == AppState.RECORDING) return
+        if (currentState == AppState.SAVING || currentState == AppState.ERROR) return
+        currentState = if (riderDetected) AppState.RIDER_DETECTED else AppState.MONITORING
+        showIdle(riderDetected)
+    }
+
+    private fun showIdle(riderDetected: Boolean) {
+        recordingProgress.visibility = View.GONE
+        if (!autoMode) {
+            statusChip.visibility = View.GONE
             return
         }
-
-        // Always update last confidence if we have detection data
-        if (confidence > 0) {
-            lastConfidence = confidence
-        }
-
-        when {
-            riderDetected -> {
-                if (currentState != AppState.RECORDING) {
-                    updateState(AppState.RIDER_DETECTED)
-                    statusIndicator.backgroundTintList = ContextCompat.getColorStateList(context, android.R.color.holo_green_light)
-                    statusText.text = "Rider Detected"
-                    confidenceText?.text = String.format("%.1f%% confidence", confidence * 100)
-                    recordingStatus.text = "Ready to record"
-                    
-                    // Show pulse animation
-                    pulseRing?.visibility = View.VISIBLE
-                    pulseRing?.animate()
-                        ?.scaleX(1.2f)
-                        ?.scaleY(1.2f)
-                        ?.alpha(0.0f)
-                        ?.setDuration(1000)
-                        ?.withEndAction {
-                            pulseRing?.scaleX = 1.0f
-                            pulseRing?.scaleY = 1.0f
-                            pulseRing?.alpha = 0.3f
-                        }
-                        ?.start()
-                }
-            }
-            else -> {
-                if (currentState != AppState.RECORDING) {
-                    updateState(AppState.MONITORING)
-                    statusIndicator.backgroundTintList = ContextCompat.getColorStateList(context, android.R.color.holo_orange_light)
-                    statusText.text = "Monitoring"
-                    // Keep showing last confidence value instead of clearing it
-                    confidenceText?.text = if (lastConfidence > 0) {
-                        String.format("Last: %.1f%%", lastConfidence * 100)
-                    } else {
-                        "No detection yet"
-                    }
-                    recordingStatus.text = "Waiting for rider..."
-                    pulseRing?.visibility = View.GONE
-                }
-            }
+        statusChip.visibility = View.VISIBLE
+        statusChip.setBackgroundResource(R.drawable.badge_background)
+        if (riderDetected) {
+            tintDot(android.R.color.holo_green_light)
+            statusText.text = "Rider in frame"
+        } else {
+            tintDot(android.R.color.holo_orange_light)
+            statusText.text = "Watching for a rider"
         }
     }
 
     fun updateRecordingStarted() {
-        updateState(AppState.RECORDING)
-        recordingOverlay.visibility = View.VISIBLE
-        recordingProgress?.visibility = View.VISIBLE
-        recordingProgress?.progress = 0
-        
-        statusIndicator.setBackgroundResource(R.drawable.circle_indicator)
-        statusIndicator.backgroundTintList = ContextCompat.getColorStateList(context, android.R.color.holo_red_light)
-        statusText.text = "Recording"
-        confidenceText?.text = ""
-        val maxDurationSec = settingsManager.getRecordingDuration()
-        recordingStatus.text = "Recording: 0.0s / ${maxDurationSec}.0s"
-        pulseRing?.visibility = View.GONE
-        
-        // Animate recording dot
-        recordingDot?.animate()
-            ?.alpha(0.3f)
-            ?.setDuration(500)
-            ?.withEndAction {
-                recordingDot?.animate()
-                    ?.alpha(1.0f)
-                    ?.setDuration(500)
-                    ?.withEndAction { animateRecordingDot() }
-                    ?.start()
-            }
-            ?.start()
-    }
-    
-    private fun animateRecordingDot() {
-        if (currentState == AppState.RECORDING) {
-            recordingDot?.animate()
-                ?.alpha(0.3f)
-                ?.setDuration(500)
-                ?.withEndAction {
-                    recordingDot?.animate()
-                        ?.alpha(1.0f)
-                        ?.setDuration(500)
-                        ?.withEndAction { animateRecordingDot() }
-                        ?.start()
-                }
-                ?.start()
-        }
+        currentState = AppState.RECORDING
+        statusChip.visibility = View.VISIBLE
+        statusChip.setBackgroundResource(R.drawable.status_chip_recording)
+        tintDot(android.R.color.holo_red_light)
+        recordingProgress.visibility = View.VISIBLE
+        recordingProgress.progress = 0
+        updateRecordingProgress(0)
     }
 
     fun updateRecordingProgress(elapsedMs: Long) {
-        if (currentState == AppState.RECORDING) {
-            val seconds = elapsedMs / 1000
-            val tenths = (elapsedMs % 1000) / 100
-            val maxDurationMs = settingsManager.getRecordingDurationMs()
-            val progress = ((elapsedMs.toFloat() / maxDurationMs) * 100).toInt()
-            
-            recordingStatus.text = String.format(
-                "Recording: %d.%ds / %.1fs", 
-                seconds, 
-                tenths, 
-                maxDurationMs / 1000.0
-            )
-            
-            recordingProgress?.progress = progress
-        }
+        if (currentState != AppState.RECORDING) return
+        val maxDurationMs = settingsManager.getRecordingDurationMs()
+        statusText.text = "REC ${formatClock(elapsedMs)} / ${formatClock(maxDurationMs)}"
+        recordingProgress.progress = ((elapsedMs.toFloat() / maxDurationMs) * 100).toInt()
     }
 
     fun updateRecordingFinished(success: Boolean, message: String? = null) {
-        recordingOverlay.visibility = View.GONE
-        recordingProgress?.visibility = View.GONE
-        recordingDot?.clearAnimation()
-        
+        recordingProgress.visibility = View.GONE
+        statusChip.visibility = View.VISIBLE
         if (success) {
-            updateState(AppState.SAVING)
-            recordingStatus.text = message ?: "Video saved!"
-            statusIndicator.backgroundTintList = ContextCompat.getColorStateList(context, android.R.color.holo_green_light)
-            statusText.text = "Video saved"
-            confidenceText?.text = "Success!"
-            
-            // Auto-reset to monitoring after delay
-            statusIndicator.postDelayed({
-                if (currentState == AppState.SAVING) {
-                    resetToMonitoring()
-                }
-            }, 2000)
+            currentState = AppState.SAVING
+            statusChip.setBackgroundResource(R.drawable.status_chip_saved)
+            tintDot(android.R.color.holo_green_light)
+            statusText.text = message ?: "Saved"
+            statusChip.postDelayed({ if (currentState == AppState.SAVING) resetToMonitoring() }, 2000)
         } else {
-            updateState(AppState.ERROR)
-            recordingStatus.text = message ?: "Recording failed"
-            statusIndicator.backgroundTintList = ContextCompat.getColorStateList(context, android.R.color.holo_red_light)
-            statusText.text = "Error"
-            confidenceText?.text = "Failed"
-            
-            // Auto-reset to monitoring after error display
-            statusIndicator.postDelayed({
-                if (currentState == AppState.ERROR) {
-                    resetToMonitoring()
-                }
-            }, 3000)
+            showError(message ?: "Recording failed")
         }
     }
 
     fun updateError(errorMessage: String) {
-        updateState(AppState.ERROR)
-        statusIndicator.backgroundTintList = ContextCompat.getColorStateList(context, android.R.color.holo_red_light)
-        statusText.text = "Error"
-        recordingStatus.text = errorMessage
-        recordingOverlay.visibility = View.GONE
-        
-        // Auto-reset after showing error
-        statusIndicator.postDelayed({
-            if (currentState == AppState.ERROR) {
-                resetToMonitoring()
-            }
-        }, 3000)
+        recordingProgress.visibility = View.GONE
+        showError(errorMessage)
+    }
+
+    private fun showError(message: String) {
+        currentState = AppState.ERROR
+        statusChip.visibility = View.VISIBLE
+        statusChip.setBackgroundResource(R.drawable.status_chip_recording)
+        tintDot(android.R.color.holo_red_light)
+        statusText.text = message
+        statusChip.postDelayed({ if (currentState == AppState.ERROR) resetToMonitoring() }, 3000)
     }
 
     private fun resetToMonitoring() {
-        updateState(AppState.MONITORING)
-        statusIndicator.backgroundTintList = ContextCompat.getColorStateList(context, android.R.color.holo_orange_light)
-        statusText.text = "Monitoring"
-        // Keep showing last confidence instead of clearing
-        confidenceText?.text = if (lastConfidence > 0) {
-            String.format("Last: %.1f%%", lastConfidence * 100)
-        } else {
-            "No detection yet"
-        }
-        recordingStatus.text = "Waiting for rider..."
-        recordingOverlay.visibility = View.GONE
-        recordingProgress?.visibility = View.GONE
-        pulseRing?.visibility = View.GONE
-        recordingDot?.clearAnimation()
+        currentState = AppState.MONITORING
+        showIdle(riderDetected = false)
     }
 
-    private fun updateState(newState: AppState) {
-        currentState = newState
+    private fun tintDot(colorRes: Int) {
+        statusDot.backgroundTintList = ContextCompat.getColorStateList(context, colorRes)
     }
 
-    fun getCurrentState(): AppState {
-        return currentState
+    private fun formatClock(ms: Long): String {
+        val totalSec = (ms / 1000).toInt()
+        return String.format("%d:%02d", totalSec / 60, totalSec % 60)
     }
+
+    fun getCurrentState(): AppState = currentState
 
     fun canStartRecording(): Boolean {
         return currentState == AppState.MONITORING || currentState == AppState.RIDER_DETECTED

@@ -16,7 +16,7 @@ import android.view.KeyEvent
 import android.view.View
 import android.widget.TextView
 import android.widget.Toast
-import androidx.appcompat.widget.SwitchCompat
+import androidx.recyclerview.widget.RecyclerView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.view.PreviewView
 import androidx.core.app.ActivityCompat
@@ -45,18 +45,20 @@ class MainActivity : AppCompatActivity(),
     private lateinit var settingsManager: SettingsManager
     
     // UI elements
-    private lateinit var statusIndicator: View
+    private lateinit var statusChip: View
+    private lateinit var statusDot: View
     private lateinit var statusText: TextView
-    private lateinit var recordingStatus: TextView
-    private lateinit var recordingOverlay: View
-    private lateinit var confidenceText: TextView
-    private lateinit var pulseRing: View
     private lateinit var recordingProgress: android.widget.ProgressBar
-    private lateinit var recordingDot: View
-    private lateinit var segmentCount: TextView
-    private lateinit var detectionToggle: SwitchCompat
-    private lateinit var testRecordButton: android.widget.ImageButton
-    private lateinit var statusContainer: View
+    private lateinit var modeManual: TextView
+    private lateinit var modeAuto: TextView
+    private lateinit var recordButton: android.widget.ImageButton
+    private lateinit var recentClipsContainer: View
+    private lateinit var recentClipsList: RecyclerView
+    private lateinit var clipCountText: TextView
+    private lateinit var bottomGradient: View
+    private lateinit var recentClipsAdapter: RecentClipsAdapter
+    // Clip ids on screen when it opened; anything newer gets a NEW tag in the strip
+    private var knownClipIds: Set<Long>? = null
     
     // Wake lock for preventing sleep during detection
     private lateinit var wakeLock: PowerManager.WakeLock
@@ -87,18 +89,17 @@ class MainActivity : AppCompatActivity(),
             graphicOverlay = findViewById(R.id.graphicOverlay)
             
             // Initialize UI elements
-            statusIndicator = findViewById(R.id.statusIndicator)
+            statusChip = findViewById(R.id.statusChip)
+            statusDot = findViewById(R.id.statusDot)
             statusText = findViewById(R.id.statusText)
-            recordingStatus = findViewById(R.id.recordingStatus)
-            recordingOverlay = findViewById(R.id.recordingOverlay)
-            confidenceText = findViewById(R.id.confidenceText)
-            pulseRing = findViewById(R.id.pulseRing)
             recordingProgress = findViewById(R.id.recordingProgress)
-            recordingDot = findViewById(R.id.recordingDot)
-            segmentCount = findViewById(R.id.segmentCount)
-            detectionToggle = findViewById(R.id.detectionToggle)
-            testRecordButton = findViewById(R.id.testRecordButton)
-            statusContainer = findViewById(R.id.statusContainer)
+            modeManual = findViewById(R.id.modeManual)
+            modeAuto = findViewById(R.id.modeAuto)
+            recordButton = findViewById(R.id.recordButton)
+            recentClipsContainer = findViewById(R.id.recentClipsContainer)
+            recentClipsList = findViewById(R.id.recentClipsList)
+            clipCountText = findViewById(R.id.clipCountText)
+            bottomGradient = findViewById(R.id.bottomGradient)
             
             // Initialize navigation buttons
             findViewById<android.widget.ImageButton>(R.id.settingsButton).setOnClickListener {
@@ -109,15 +110,17 @@ class MainActivity : AppCompatActivity(),
                 startActivity(android.content.Intent(this, VideoGalleryActivity::class.java))
             }
             
-            findViewById<android.widget.ImageButton>(R.id.zoomTestButton).setOnClickListener {
-                startActivity(android.content.Intent(this, ZoomTestActivity::class.java))
+            // Today's clips: tap one to play it straight from the camera
+            recentClipsAdapter = RecentClipsAdapter { clip ->
+                startActivity(android.content.Intent(this, VideoPlaybackActivity::class.java).apply {
+                    putExtra(VideoPlaybackActivity.EXTRA_VIDEO_URI, clip.uri.toString())
+                    putExtra(VideoPlaybackActivity.EXTRA_VIDEO_NAME, clip.displayName)
+                })
             }
+            recentClipsList.adapter = recentClipsAdapter
+            loadRecentClips()
             
-            // Update video count
-            updateVideoCount()
-            
-            // Test button for manual recording
-            testRecordButton.setOnClickListener {
+            recordButton.setOnClickListener {
                 manualStartRecording()
             }
 
@@ -161,10 +164,7 @@ class MainActivity : AppCompatActivity(),
             riderDetectorManager, graphicOverlay, settingsManager
         )
         
-        uiStateManager = UIStateManager(
-            this, statusIndicator, statusText, recordingStatus, recordingOverlay,
-            confidenceText, pulseRing, recordingProgress, recordingDot
-        )
+        uiStateManager = UIStateManager(this, statusChip, statusDot, statusText, recordingProgress)
         
         // Set callbacks
         riderDetectionProcessor.setCallback(this)
@@ -184,54 +184,86 @@ class MainActivity : AppCompatActivity(),
             "MTBAnalyzer::RiderDetectionWakeLock"
         )
         
-        // Initialize detection toggle
-        detectionToggle.isChecked = settingsManager.isRiderDetectionEnabled()
-        detectionToggle.setOnCheckedChangeListener { _, isChecked ->
-            settingsManager.setRiderDetectionEnabled(isChecked)
-            updateDetectionState(isChecked)
-            Toast.makeText(this, if (isChecked) "Auto-record enabled" else "Auto-record disabled", Toast.LENGTH_SHORT).show()
-        }
+        // Mode pill: Manual | Auto
+        updateModeUi(settingsManager.isRiderDetectionEnabled())
+        modeManual.setOnClickListener { setAutoRecord(false) }
+        modeAuto.setOnClickListener { setAutoRecord(true) }
+    }
+    
+    /** Arms or disarms auto-record for this session and reflects it everywhere. */
+    private fun setAutoRecord(enabled: Boolean) {
+        if (settingsManager.isRiderDetectionEnabled() == enabled) return
+        settingsManager.setRiderDetectionEnabled(enabled)
+        updateModeUi(enabled)
+        updateDetectionState(enabled)
+    }
+    
+    private fun updateModeUi(auto: Boolean) {
+        val black = ContextCompat.getColor(this, android.R.color.black)
+        val dim = 0xFFDDDDDD.toInt()
+        modeManual.setBackgroundResource(if (auto) 0 else R.drawable.mode_segment_selected)
+        modeManual.setTextColor(if (auto) dim else black)
+        modeAuto.setBackgroundResource(if (auto) R.drawable.mode_segment_selected else 0)
+        modeAuto.setTextColor(if (auto) black else dim)
+        modeManual.isSelected = !auto
+        modeAuto.isSelected = auto
     }
     
     
-    private fun updateVideoCount() {
+    /** Today's MTB_ clips, newest first, for the strip above the record button. */
+    private fun loadRecentClips() {
+        val clips = mutableListOf<VideoItem>()
         try {
-            val projection = arrayOf(MediaStore.Video.Media._ID, MediaStore.Video.Media.DATE_ADDED)
-            val selection = "${MediaStore.Video.Media.DISPLAY_NAME} LIKE ?"
-            val selectionArgs = arrayOf("MTB_%")
-            
-            val cursor = contentResolver.query(
-                MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
-                projection,
-                selection,
-                selectionArgs,
-                null
+            val projection = arrayOf(
+                MediaStore.Video.Media._ID,
+                MediaStore.Video.Media.DISPLAY_NAME,
+                MediaStore.Video.Media.DATE_ADDED,
+                MediaStore.Video.Media.DURATION,
+                MediaStore.Video.Media.SIZE
             )
-            
-            var todayCount = 0
             val todayStart = Calendar.getInstance().apply {
                 set(Calendar.HOUR_OF_DAY, 0)
                 set(Calendar.MINUTE, 0)
                 set(Calendar.SECOND, 0)
                 set(Calendar.MILLISECOND, 0)
             }.timeInMillis / 1000 // MediaStore uses seconds
-            
-            cursor?.use {
-                val dateColumn = it.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_ADDED)
-                while (it.moveToNext()) {
-                    val dateAdded = it.getLong(dateColumn)
-                    if (dateAdded >= todayStart) {
-                        todayCount++
-                    }
+            val selection = "${MediaStore.Video.Media.DISPLAY_NAME} LIKE ? AND ${MediaStore.Video.Media.DATE_ADDED} >= ?"
+            val selectionArgs = arrayOf("MTB_%", todayStart.toString())
+            contentResolver.query(
+                MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+                projection, selection, selectionArgs,
+                "${MediaStore.Video.Media.DATE_ADDED} DESC"
+            )?.use { cursor ->
+                val idCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media._ID)
+                val nameCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DISPLAY_NAME)
+                val dateCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_ADDED)
+                val durCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DURATION)
+                val sizeCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.SIZE)
+                while (cursor.moveToNext() && clips.size < 30) {
+                    val id = cursor.getLong(idCol)
+                    clips.add(VideoItem(
+                        id = id,
+                        uri = android.content.ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, id),
+                        displayName = cursor.getString(nameCol) ?: "MTB_$id.mp4",
+                        dateAdded = cursor.getLong(dateCol),
+                        duration = cursor.getLong(durCol),
+                        size = cursor.getLong(sizeCol)
+                    ))
                 }
             }
-            
-            segmentCount.text = "$todayCount videos recorded today"
-            
         } catch (e: Exception) {
-            Log.e(TAG, "Error counting videos", e)
-            segmentCount.text = "0 videos recorded today"
+            Log.e(TAG, "Error loading today's clips", e)
         }
+        val known = knownClipIds ?: clips.map { it.id }.toSet().also { knownClipIds = it }
+        val newIds = clips.map { it.id }.filterNot { it in known }.toSet()
+        recentClipsAdapter.submit(clips, newIds)
+        clipCountText.text = if (clips.size == 1) "1 clip" else "${clips.size} clips"
+        recentClipsContainer.visibility = if (clips.isEmpty()) View.GONE else View.VISIBLE
+        val gradientDp = if (clips.isEmpty()) 170 else 290
+        bottomGradient.layoutParams = bottomGradient.layoutParams.apply {
+            height = (gradientDp * resources.displayMetrics.density).toInt()
+        }
+        if (newIds.isNotEmpty()) recentClipsList.scrollToPosition(0)
     }
 
     private fun startCamera() {
@@ -270,16 +302,17 @@ class MainActivity : AppCompatActivity(),
             // Notify rider detection processor that recording has actually started
             riderDetectionProcessor.setRecordingStarted()
             // Update record button to show recording state
-            testRecordButton.setImageResource(R.drawable.ic_recording)
+            recordButton.setImageResource(R.drawable.ic_recording)
+            recordButton.contentDescription = "Stop recording"
         }
     }
 
     override fun onRecordingFinished(success: Boolean, uri: String?, error: String?) {
         runOnUiThread {
             if (success) {
-                uiStateManager.updateRecordingFinished(true, "Video saved!")
-                // Update video count after successful recording
-                updateVideoCount()
+                uiStateManager.updateRecordingFinished(true, "Saved")
+                // The new clip lands in the strip with a NEW tag
+                loadRecentClips()
             } else {
                 uiStateManager.updateRecordingFinished(false, error ?: "Recording failed")
             }
@@ -287,7 +320,8 @@ class MainActivity : AppCompatActivity(),
             riderDetectionProcessor.setRecordingStopped()
             
             // Reset record button to normal state
-            testRecordButton.setImageResource(R.drawable.ic_record)
+            recordButton.setImageResource(R.drawable.ic_record)
+            recordButton.contentDescription = "Record"
             
             // Stop progress timer in case this was manual recording
             stopRecordingProgressTimer()
@@ -417,8 +451,8 @@ class MainActivity : AppCompatActivity(),
 
     override fun onResume() {
         super.onResume()
-        // Update video count when returning to the app
-        updateVideoCount()
+        // Pick up clips imported or deleted while away
+        if (::recentClipsAdapter.isInitialized) loadRecentClips()
     }
     
     // SharedPreferences.OnSharedPreferenceChangeListener implementation
@@ -433,10 +467,9 @@ class MainActivity : AppCompatActivity(),
             "rider_detection_enabled" -> {
                 val enabled = settingsManager.isRiderDetectionEnabled()
                 Log.d(TAG, "Rider detection enabled changed to: $enabled")
-                // Update toggle button to match settings
-                detectionToggle.isChecked = enabled
+                // Keep the mode pill in step with the settings screen / remote
+                updateModeUi(enabled)
                 updateDetectionState(enabled)
-                Toast.makeText(this, if (enabled) "Auto-record enabled" else "Auto-record disabled", Toast.LENGTH_SHORT).show()
             }
             "motion_threshold", "min_motion_area", "show_motion_overlay" -> {
                 // Motion detection settings changed
@@ -460,9 +493,7 @@ class MainActivity : AppCompatActivity(),
             // Enable detection and keep screen on
             riderDetectionProcessor.setDetectionEnabled(true)
             
-            // Show status display
-            statusContainer.visibility = View.VISIBLE
-            recordingStatus.visibility = View.VISIBLE
+            uiStateManager.setAutoMode(true)
             
             // Keep screen on using window flags (most reliable for camera apps)
             window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -476,9 +507,7 @@ class MainActivity : AppCompatActivity(),
             // Disable detection and allow screen to sleep
             riderDetectionProcessor.setDetectionEnabled(false)
             
-            // Hide status display
-            statusContainer.visibility = View.GONE
-            recordingStatus.visibility = View.GONE
+            uiStateManager.setAutoMode(false)
             
             // Allow screen to turn off
             window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -525,9 +554,7 @@ class MainActivity : AppCompatActivity(),
                     Log.d(TAG, "Volume down pressed - Bluetooth remote control")
                     val currentState = settingsManager.isRiderDetectionEnabled()
                     val newState = !currentState
-                    settingsManager.setRiderDetectionEnabled(newState)
-                    detectionToggle.isChecked = newState
-                    updateDetectionState(newState)
+                    setAutoRecord(newState)
                     Toast.makeText(this, 
                         if (newState) "Auto-record enabled (remote)" 
                         else "Auto-record disabled (remote)", 
