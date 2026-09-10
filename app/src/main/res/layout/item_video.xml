@@ -1,100 +1,103 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_margin="4dp"
-    app:cardCornerRadius="8dp"
-    app:cardElevation="4dp"
-    android:foreground="?android:attr/selectableItemBackground">
+    android:padding="4dp">
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical">
+    <!-- Portrait tile: clips are usually 9:16, so the rider fills it -->
+    <FrameLayout
+        android:id="@+id/tile"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="@drawable/clip_thumb_background"
+        android:clipToOutline="true"
+        android:foreground="?android:attr/selectableItemBackground"
+        app:layout_constraintDimensionRatio="9:16"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
 
-        <FrameLayout
+        <ImageView
+            android:id="@+id/video_thumbnail"
             android:layout_width="match_parent"
-            android:layout_height="120dp">
+            android:layout_height="match_parent"
+            android:scaleType="centerCrop"
+            android:importantForAccessibility="no" />
 
-            <ImageView
-                android:id="@+id/video_thumbnail"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:scaleType="fitCenter"
-                android:background="#333333" />
-                
-            <!-- Selection overlay -->
-            <View
-                android:id="@+id/selectionOverlay"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:background="#88FF4444"
-                android:visibility="gone" />
-                
-            <!-- Selection checkbox -->
-            <CheckBox
-                android:id="@+id/selectionCheckbox"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="top|end"
-                android:layout_margin="8dp"
-                android:visibility="gone"
-                android:buttonTint="#FF4444" />
-
-            <TextView
-                android:id="@+id/video_duration"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="bottom|end"
-                android:layout_margin="4dp"
-                android:background="#AA000000"
-                android:padding="4dp"
-                android:text="0:08"
-                android:textColor="#FFFFFF"
-                android:textSize="12sp" />
-
-            <!-- Play button overlay -->
-            <ImageView
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:layout_gravity="center"
-                android:src="@android:drawable/ic_media_play"
-                android:background="@drawable/circle_indicator"
-                android:backgroundTint="#88FFFFFF"
-                android:padding="12dp"
-                app:tint="#FFFFFF" />
-
-        </FrameLayout>
-
-        <LinearLayout
+        <!-- Only unselected tiles in compare mode dim; a selected one keeps its outline -->
+        <View
+            android:id="@+id/tileScrim"
             android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="#8C000000"
+            android:visibility="gone" />
+
+        <View
+            android:id="@+id/selectedOutline"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/tile_selected_outline"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/importTag"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="8dp">
+            android:layout_gravity="top|start"
+            android:layout_margin="6dp"
+            android:paddingStart="5dp"
+            android:paddingEnd="5dp"
+            android:paddingTop="1dp"
+            android:paddingBottom="1dp"
+            android:background="@drawable/tag_background"
+            android:text="import"
+            android:textColor="@android:color/white"
+            android:textSize="10sp"
+            android:visibility="gone" />
 
-            <TextView
-                android:id="@+id/video_title"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="2024-01-15-14-30-22"
-                android:textColor="#000000"
-                android:textSize="14sp"
-                android:textStyle="bold"
-                android:maxLines="1"
-                android:ellipsize="end" />
+        <!-- Compare mode: an empty ring, or the pick number -->
+        <TextView
+            android:id="@+id/selectBadge"
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:layout_gravity="top|end"
+            android:layout_margin="6dp"
+            android:gravity="center"
+            android:background="@drawable/select_ring"
+            android:text=""
+            android:textColor="@android:color/black"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
 
-            <TextView
-                android:id="@+id/video_date"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Jan 15, 14:30"
-                android:textColor="#666666"
-                android:textSize="12sp"
-                android:layout_marginTop="2dp" />
+        <TextView
+            android:id="@+id/video_time"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|start"
+            android:layout_margin="6dp"
+            android:text="14:43"
+            android:textColor="#DDDDDD"
+            android:textSize="11sp"
+            android:shadowColor="#000000"
+            android:shadowRadius="3" />
 
-        </LinearLayout>
+        <TextView
+            android:id="@+id/video_duration"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|end"
+            android:layout_margin="6dp"
+            android:paddingStart="5dp"
+            android:paddingEnd="5dp"
+            android:paddingTop="1dp"
+            android:paddingBottom="1dp"
+            android:background="@drawable/duration_tag_background"
+            android:text="0:08"
+            android:textColor="@android:color/white"
+            android:textSize="11sp" />
 
-    </LinearLayout>
+    </FrameLayout>
 
-</androidx.cardview.widget.CardView>
+</androidx.constraintlayout.widget.ConstraintLayout>

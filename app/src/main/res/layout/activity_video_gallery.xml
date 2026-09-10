@@ -5,44 +5,40 @@
     android:layout_height="match_parent"
     android:background="#000000">
 
-    <!-- Compare Mode Controls -->
+    <!-- Compare mode header: close + instruction. Hidden otherwise -->
     <LinearLayout
-        android:id="@+id/compareControls"
+        android:id="@+id/compareHeader"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:background="#E6000000"
-        android:padding="12dp"
         android:gravity="center_vertical"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingTop="14dp"
+        android:paddingBottom="6dp"
         android:visibility="gone"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
+
+        <ImageButton
+            android:id="@+id/cancelCompareButton"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="@drawable/button_circle_background"
+            android:src="@drawable/ic_close"
+            android:contentDescription="Cancel compare" />
 
         <TextView
             android:id="@+id/compareInstructions"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Select 2 videos to compare"
+            android:layout_marginStart="12dp"
+            android:text="Pick 2 clips to compare"
             android:textColor="#FFFFFF"
-            android:textSize="14sp" />
-
-        <Button
-            android:id="@+id/cancelCompareButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Cancel"
-            android:layout_marginEnd="8dp"
-            android:backgroundTint="#666666" />
-
-        <Button
-            android:id="@+id/startCompareButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Compare"
-            android:enabled="false"
-            android:backgroundTint="#FF4444" />
+            android:textSize="14sp"
+            android:textStyle="bold" />
 
     </LinearLayout>
 
@@ -50,9 +46,12 @@
         android:id="@+id/recycler_view"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:padding="8dp"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="112dp"
         android:clipToPadding="false"
-        app:layout_constraintTop_toBottomOf="@+id/compareControls"
+        app:layout_constraintTop_toBottomOf="@id/compareHeader"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
@@ -75,33 +74,54 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
-    <!-- Import a clip from the phone (Photo Picker) -->
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/importButton"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginEnd="24dp"
-        android:layout_marginBottom="16dp"
-        app:fabSize="mini"
-        android:src="@drawable/ic_import"
-        app:tint="#FFFFFF"
-        app:backgroundTint="#333333"
-        app:layout_constraintBottom_toTopOf="@+id/compareButton"
-        app:layout_constraintEnd_toEndOf="parent"
-        android:contentDescription="Import video" />
-
-    <!-- Floating Action Button for Compare Mode -->
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/compareButton"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_margin="16dp"
-        android:src="@android:drawable/ic_menu_slideshow"
-        app:tint="#FFFFFF"
-        app:backgroundTint="#FF4444"
+    <View
+        android:layout_width="0dp"
+        android:layout_height="140dp"
+        android:background="@drawable/controls_gradient_bottom"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        android:contentDescription="Compare Videos" />
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
 
+    <!-- Bottom controls: Import circle + Compare pill (the pill alone, centred, in compare mode) -->
+    <LinearLayout
+        android:id="@+id/bottomControls"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical|end"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:layout_marginBottom="24dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <ImageButton
+            android:id="@+id/importButton"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginEnd="12dp"
+            android:background="@drawable/button_circle_background"
+            android:src="@drawable/ic_import"
+            app:tint="#FFFFFF"
+            android:contentDescription="Import video" />
+
+        <TextView
+            android:id="@+id/compareButton"
+            android:layout_width="wrap_content"
+            android:layout_height="44dp"
+            android:gravity="center"
+            android:paddingStart="16dp"
+            android:paddingEnd="18dp"
+            android:drawableStart="@drawable/ic_compare"
+            android:drawablePadding="8dp"
+            android:background="@drawable/mode_pill_background"
+            android:text="Compare"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:contentDescription="Compare Videos" />
+
+    </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

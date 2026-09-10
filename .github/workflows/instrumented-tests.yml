@@ -74,7 +74,7 @@ jobs:
           api-level: 29
           arch: x86_64
           force-avd-creation: false
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           script: adb uninstall com.mtbanalyzer || true; adb uninstall com.mtbanalyzer.test || true; adb logcat -c; ./gradlew connectedDebugAndroidTest ${TEST_CLASS:+-Pandroid.testInstrumentationRunnerArguments.class=$TEST_CLASS}; rc=$?; adb logcat -d '*:E' > logcat_errors.txt; adb logcat -d DetectionTuning:* DETECTION_TUNING:* AndroidRuntime:* > logcat_app.txt; exit $rc
 

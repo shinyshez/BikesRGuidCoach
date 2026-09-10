@@ -18,9 +18,18 @@ echo "Screen size: ${SCREEN_W}x${SCREEN_H}"
 
 # find_bounds <attr> <value>: print "x1 y1 x2 y2" of the first node in the current
 # UI hierarchy whose <attr> equals <value>; prints nothing if not on screen.
+# On the API 29 CI image, two uiautomator connections close together can deadlock the
+# system server's UiAutomationManager and the watchdog then kills it ("No service
+# published for: input"). A pause between dumps keeps the previous one torn down.
+UI_DUMP_GAP=${UI_DUMP_GAP:-1.5}
+ui_dump() {
+  sleep "$UI_DUMP_GAP"
+  adb shell uiautomator dump "$1" > /dev/null
+}
+
 find_bounds() {
   local attr="$1" value="$2"
-  adb shell uiautomator dump /sdcard/ui_dump.xml > /dev/null
+  ui_dump /sdcard/ui_dump.xml
   adb pull /sdcard/ui_dump.xml /tmp/ui_dump.xml > /dev/null
   grep -o "<node[^>]*${attr}=\"${value}\"[^>]*>" /tmp/ui_dump.xml \
     | grep -oE 'bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]"' | head -1 \
@@ -72,7 +81,7 @@ tap_by_attr() {
 
 # dump_ui <name>: save the current UI hierarchy alongside the screenshots for debugging.
 dump_ui() {
-  adb shell uiautomator dump /sdcard/ui_dump.xml > /dev/null || true
+  ui_dump /sdcard/ui_dump.xml || true
   adb pull /sdcard/ui_dump.xml "$OUT/$1.xml" > /dev/null || true
 }
 
