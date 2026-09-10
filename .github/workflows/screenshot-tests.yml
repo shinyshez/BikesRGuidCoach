@@ -59,13 +59,27 @@ jobs:
       - name: Build Debug APK
         run: ./gradlew assembleDebug
 
-      - name: Run Emulator and Capture Screenshots
+      # The cached snapshot must come from this clean boot, never from the end of a
+      # capture run: a snapshot taken after tests/captures has had the app uninstalled
+      # and services torn down, and boots with system services missing next time.
+      - name: Create AVD and generate snapshot
+        if: steps.avd-cache.outputs.cache-hit != 'true'
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 29
           arch: x86_64
           force-avd-creation: false
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          disable-animations: true
+          script: echo "Generated AVD snapshot for caching."
+
+      - name: Run Emulator and Capture Screenshots
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 29
+          arch: x86_64
+          force-avd-creation: false
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           disable-animations: true
           script: bash scripts/capture-screenshots.sh screenshots
 
