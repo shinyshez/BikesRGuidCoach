@@ -453,6 +453,8 @@ class MainActivity : AppCompatActivity(),
         super.onResume()
         // Pick up clips imported or deleted while away
         if (::recentClipsAdapter.isInitialized) loadRecentClips()
+        // Load the start callout now rather than when the rider drops in
+        if (::recordingManager.isInitialized) recordingManager.prepareFeedback()
     }
     
     // SharedPreferences.OnSharedPreferenceChangeListener implementation

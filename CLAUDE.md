@@ -212,6 +212,12 @@ consent dialog (`MediaStore.createDeleteRequest`).
 - **Detector Type**: Choose between ML Kit Pose Detection, Motion Detection, Optical Flow, or Hybrid
 - **Recording Duration**: Set video length (default 8 seconds)
 - **Detection Sensitivity**: Adjust motion and pose detection thresholds
+- **Start Callout**: Play a voice clip ("dropping") in place of the start beep. The clip is
+  the user's own pick (a persisted `content://` URI from the file picker) or an optional
+  bundled one at `app/src/main/res/raw/dropping.<ext>`, looked up by name so the app builds
+  either way. With the callout on but no clip available it falls back to the beep.
+  `SoundManager.resolveStartSound` holds that choice; `Settings › Feedback › Callout Sample`
+  plays, replaces or resets the clip
 - **Remote Control**: Enable Bluetooth remote control via volume buttons
 - **Performance Overlay**: Show detection performance metrics
 - **Orientation Support**: Settings screen adapts to device orientation

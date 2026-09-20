@@ -61,6 +61,8 @@ MTB Analyzer is an Android application that uses computer vision to automaticall
 #### Feedback Options
 - **Haptic Feedback**: Vibration on recording events
 - **Sound Feedback**: Audio cues for recording start/stop
+- **Start Callout**: Play a voice clip (a rider calling "dropping") instead of the start beep
+  - Pick any audio file on the device, or use the clip bundled at `res/raw/dropping`
 - **Pose Overlay**: Show detected skeleton during recording
 
 #### Remote Control

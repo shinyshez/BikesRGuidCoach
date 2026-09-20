@@ -186,6 +186,14 @@ class RecordingManager(
         }
     }
 
+    /**
+     * Gets audio feedback ready for the next recording. Call it when the capture screen
+     * resumes, so a callout the user changed in Settings is loaded before it is needed.
+     */
+    fun prepareFeedback() {
+        soundManager.prepareCallout()
+    }
+
     fun isRecording(): Boolean {
         return recording != null && recordingState == RecordingState.RECORDING
     }

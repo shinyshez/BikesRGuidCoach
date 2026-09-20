@@ -78,6 +78,17 @@
             android:defaultValue="false" />
 
         <SwitchPreferenceCompat
+            android:key="start_callout"
+            android:title="Start Callout"
+            android:summary="Play a voice sample instead of the beep when recording starts"
+            android:defaultValue="false" />
+
+        <Preference
+            android:key="start_callout_sample"
+            android:title="Callout Sample"
+            android:dependency="start_callout" />
+
+        <SwitchPreferenceCompat
             android:key="show_pose_overlay"
             android:title="Show Pose Overlay"
             android:summary="Display detected pose skeleton"
