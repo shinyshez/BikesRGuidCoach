@@ -69,6 +69,10 @@ class ViewerLinkServer(private val routes: ViewerLinkRoutes) {
     }
 
     private fun bind(address: InetAddress, preferredPort: Int): ServerSocket {
+        // 0 means "any free port" — there is no window to walk, and walking it would
+        // march into privileged ports.
+        if (preferredPort <= 0) return ServerSocket(0, BACKLOG, address)
+
         for (offset in 0 until PORT_ATTEMPTS) {
             try {
                 return ServerSocket(preferredPort + offset, BACKLOG, address)

@@ -18,6 +18,8 @@ import org.junit.runner.RunWith
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.InetAddress
+import java.net.InetSocketAddress
+import java.net.Socket
 import java.net.URL
 
 /**
@@ -31,7 +33,13 @@ class ViewerLinkServerInstrumentedTest {
 
     private companion object {
         const val TOKEN = "test-token-123"
-        const val TEST_PORT = 18080
+
+        /**
+         * Explicitly IPv4, never InetAddress.getLoopbackAddress(): that returns ::1 where
+         * IPv6 is preferred, so the server would bind IPv6-only while HttpURLConnection
+         * dials 127.0.0.1 and every request is refused on a port the server reports as bound.
+         */
+        val LOOPBACK: InetAddress = InetAddress.getByName("127.0.0.1")
     }
 
     private lateinit var context: Context
@@ -61,7 +69,25 @@ class ViewerLinkServerInstrumentedTest {
             allowedHosts = setOf("127.0.0.1", "localhost")
         )
         server = ViewerLinkServer(routes)
-        port = server.start(InetAddress.getLoopbackAddress(), TEST_PORT)
+        // Port 0: the OS picks a free one, so twelve sequential tests can never collide.
+        port = server.start(LOOPBACK, 0)
+        awaitReachable()
+    }
+
+    /**
+     * Fails loudly and specifically if the socket isn't actually reachable, rather than
+     * leaving every test to report an indistinguishable ConnectException.
+     */
+    private fun awaitReachable() {
+        try {
+            Socket().use { it.connect(InetSocketAddress(LOOPBACK, port), 2_000) }
+        } catch (e: Exception) {
+            throw AssertionError(
+                "Viewer link server reported port $port on ${LOOPBACK.hostAddress} " +
+                    "but is not reachable there: ${e.javaClass.simpleName} ${e.message}",
+                e
+            )
+        }
     }
 
     @After
