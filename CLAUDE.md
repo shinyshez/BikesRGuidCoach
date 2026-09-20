@@ -251,6 +251,11 @@ Two details worth knowing before changing any of it:
 - **A per-session token** is generated on every start, passed in the QR's query string, then
   moved into an `HttpOnly` cookie. Plain HTTP on purpose: a self-signed cert on a local IP
   trains people to click through browser warnings. Revisit if a write path is ever added
+- **Cleartext is only permitted in debug builds, and only to loopback**
+  (`app/src/debug/res/xml/network_security_config.xml`), for the instrumented test. The
+  server itself needs no exemption — the policy blocks outbound requests, not a
+  `ServerSocket`. A native viewer mode pointing media3 at `http://` *would* need a
+  production config scoped to private address ranges
 
 `ViewerLink-Phase1-Spec.md` has the full API contract, the security model and what is
 deliberately deferred (app-provisioned hotspot, native viewer mode, live preview).
