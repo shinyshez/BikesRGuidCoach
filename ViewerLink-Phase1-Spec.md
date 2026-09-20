@@ -162,9 +162,13 @@ exists so Phase 2 does not need an API version bump.
 
 ### Errors
 
-Plain JSON `{"error":"..."}` with `401` (bad/missing token), `404` (unknown id),
-`416` (bad range), `503` (media read permission not granted — the viewer page renders this
-as "the recorder needs storage permission", mirroring the gallery's own empty state).
+Plain JSON `{"error":"..."}` with `401` (bad/missing token), `404` (unknown id) and
+`416` (bad range).
+
+Missing media-read permission is **not** an error. MediaStore still returns the clips this
+install owns, so failing the request would hide clips the viewer could otherwise watch.
+`/api/clips` instead carries `"mediaPermission": false` and the page explains that older
+clips are hidden — the same behaviour as the gallery, which lists what it can see.
 
 ## 7. Security model
 
@@ -267,7 +271,7 @@ artifact and no camera dependency. Render the `BitMatrix` to a `Bitmap` directly
 | File | Change |
 |---|---|
 | `AndroidManifest.xml` | Permissions above; `ViewerLinkActivity`; `ViewerLinkService` |
-| `res/xml/preferences.xml` | New **Viewer Link** category after Remote Control (line ~104), with an enable switch and a "Show QR code" entry |
+| `res/xml/preferences.xml` | New **Viewer Link** category after Remote Control (order 450), with one entry opening the screen. The on/off control lives on that screen rather than in Settings, so turning it on and scanning the code it produces are the same step |
 | `SettingsActivity.kt` | Wire the new preference to `ViewerLinkActivity`, alongside the existing `zoom_test`/`detection_tuning` handlers (lines 149-155) |
 | `SettingsManager.kt` | `KEY_VIEWER_LINK_ENABLED`, default `false` |
 | `app/build.gradle.kts` | `com.google.zxing:core:3.5.3` |
@@ -281,7 +285,8 @@ Phase 2 collapses the two.
 **Unit (JVM, runs in `unit-tests.yml`)** — the parsing is where the bugs will be:
 
 - `HttpRange`: open/closed/suffix ranges, `bytes=0-`, `bytes=-500`, past-EOF, malformed,
-  multi-range (reject with 416), off-by-one on `Content-Range`.
+  multi-range (ignored, serving the full entity per RFC 7233), off-by-one on
+  `Content-Range`.
 - Request-line and header parsing, including an oversized header guard.
 - `MTB_…` → `kind` classification, including the import fallback.
 - Clip JSON shape.

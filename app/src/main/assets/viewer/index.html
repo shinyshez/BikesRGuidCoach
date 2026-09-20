@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>MTB Analyzer</title>
+<style>
+:root{--bg:#0e0e10;--tile:#1a1a1e;--fg:#f2f2f4;--dim:#9a9aa0;--accent:#7c5cff;--new:#39d353}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg);
+font:15px/1.45 -apple-system,BlinkMacSystemFont,system-ui,"Segoe UI",Roboto,sans-serif;
+-webkit-text-size-adjust:100%}
+header{position:sticky;top:0;z-index:5;padding:14px 16px 10px;
+background:linear-gradient(180deg,var(--bg) 70%,rgba(14,14,16,0));display:flex;
+align-items:baseline;gap:8px}
+header h1{font-size:17px;margin:0;font-weight:650;letter-spacing:.2px}
+header span{color:var(--dim);font-size:13px}
+main{padding:0 16px 40px}
+.day{color:var(--dim);font-size:13px;font-weight:600;margin:18px 2px 8px;
+text-transform:none;letter-spacing:.2px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+@media(min-width:620px){.grid{grid-template-columns:repeat(5,1fr)}}
+.tile{position:relative;aspect-ratio:9/16;background:var(--tile);border-radius:10px;
+overflow:hidden;cursor:pointer;border:0;padding:0;display:block;width:100%}
+.tile img{width:100%;height:100%;object-fit:cover;display:block;opacity:0;
+transition:opacity .2s ease}
+.tile img.ready{opacity:1}
+.meta{position:absolute;left:0;right:0;bottom:0;padding:16px 7px 6px;display:flex;
+justify-content:space-between;align-items:flex-end;gap:4px;font-size:11px;
+background:linear-gradient(0deg,rgba(0,0,0,.78),rgba(0,0,0,0))}
+.meta b{font-weight:600}
+.meta span{color:#d8d8dc}
+.tag{position:absolute;top:6px;left:6px;font-size:9px;font-weight:700;letter-spacing:.4px;
+text-transform:uppercase;padding:2px 5px;border-radius:5px;background:rgba(0,0,0,.6);
+color:#d8d8dc}
+.tag.new{background:var(--new);color:#08130a}
+#empty,#banner{color:var(--dim);font-size:14px;padding:16px;text-align:center}
+#banner{margin:8px 16px 0;background:#241f14;color:#e8d9a8;border-radius:10px;
+text-align:left;font-size:13px;padding:10px 12px}
+#offline{position:fixed;left:16px;right:16px;bottom:16px;background:#2a1414;color:#f0c7c7;
+border-radius:10px;padding:12px 14px;display:flex;gap:12px;align-items:center;font-size:13px;
+z-index:20}
+#offline button{margin-left:auto;background:var(--accent);color:#fff;border:0;border-radius:8px;
+padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer}
+#player{position:fixed;inset:0;background:#000;z-index:30;display:flex;align-items:center;
+justify-content:center}
+#player video{width:100%;height:100%;object-fit:contain;background:#000}
+#close{position:absolute;top:calc(env(safe-area-inset-top,0px) + 10px);right:12px;width:40px;
+height:40px;border-radius:20px;border:0;background:rgba(0,0,0,.55);color:#fff;font-size:20px;
+line-height:1;cursor:pointer}
+#title{position:absolute;top:calc(env(safe-area-inset-top,0px) + 18px);left:16px;right:64px;
+color:#fff;font-size:13px;opacity:.85;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<header><h1>MTB Analyzer</h1><span id="count"></span></header>
+<div id="banner" hidden></div>
+<main id="list"></main>
+<div id="empty" hidden>No clips yet. Recordings appear here as they happen.</div>
+<div id="offline" hidden><span id="offlineText">Lost the recorder.</span>
+<button id="retry" type="button">Retry</button></div>
+<div id="player" hidden>
+  <video id="video" controls playsinline preload="metadata"></video>
+  <div id="title"></div>
+  <button id="close" type="button" aria-label="Close">&times;</button>
+</div>
+<script>
+(function () {
+  "use strict";
+
+  var POLL_MS = 5000;
+  var clips = [];
+  var seen = Object.create(null);
+  var firstLoadDone = false;
+  var pollTimer = null;
+
+  var listEl = document.getElementById("list");
+  var emptyEl = document.getElementById("empty");
+  var countEl = document.getElementById("count");
+  var bannerEl = document.getElementById("banner");
+  var offlineEl = document.getElementById("offline");
+  var offlineText = document.getElementById("offlineText");
+  var playerEl = document.getElementById("player");
+  var videoEl = document.getElementById("video");
+  var titleEl = document.getElementById("title");
+
+  function pad(n) { return n < 10 ? "0" + n : String(n); }
+
+  function timeOfDay(epochSeconds) {
+    var d = new Date(epochSeconds * 1000);
+    return pad(d.getHours()) + ":" + pad(d.getMinutes());
+  }
+
+  function duration(ms) {
+    var total = Math.round((ms || 0) / 1000);
+    return Math.floor(total / 60) + ":" + pad(total % 60);
+  }
+
+  function dayKey(epochSeconds) {
+    var d = new Date(epochSeconds * 1000);
+    return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+  }
+
+  function dayLabel(epochSeconds, count) {
+    var d = new Date(epochSeconds * 1000);
+    var today = new Date();
+    var yesterday = new Date(today.getTime() - 86400000);
+    var label;
+    if (dayKey(epochSeconds) === dayKey(Math.floor(today.getTime() / 1000))) {
+      label = "Today";
+    } else if (dayKey(epochSeconds) === dayKey(Math.floor(yesterday.getTime() / 1000))) {
+      label = "Yesterday";
+    } else {
+      label = d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+    }
+    return label + " · " + count + (count === 1 ? " clip" : " clips");
+  }
+
+  function render() {
+    listEl.textContent = "";
+    emptyEl.hidden = clips.length > 0;
+    countEl.textContent = clips.length
+      ? clips.length + (clips.length === 1 ? " clip" : " clips") : "";
+
+    var groups = [];
+    var index = Object.create(null);
+    clips.forEach(function (clip) {
+      var key = dayKey(clip.dateAdded);
+      if (!index[key]) {
+        index[key] = { key: key, at: clip.dateAdded, items: [] };
+        groups.push(index[key]);
+      }
+      index[key].items.push(clip);
+    });
+
+    groups.forEach(function (group) {
+      var heading = document.createElement("div");
+      heading.className = "day";
+      heading.textContent = dayLabel(group.at, group.items.length);
+      listEl.appendChild(heading);
+
+      var grid = document.createElement("div");
+      grid.className = "grid";
+      group.items.forEach(function (clip) { grid.appendChild(tile(clip)); });
+      listEl.appendChild(grid);
+    });
+  }
+
+  function tile(clip) {
+    var button = document.createElement("button");
+    button.className = "tile";
+    button.type = "button";
+
+    var img = document.createElement("img");
+    img.loading = "lazy";
+    img.alt = "";
+    img.src = "/api/clips/" + clip.id + "/thumb";
+    img.addEventListener("load", function () { img.className = "ready"; });
+    img.addEventListener("error", function () { img.remove(); });
+    button.appendChild(img);
+
+    if (clip.isNew || clip.kind === "import") {
+      var tag = document.createElement("span");
+      tag.className = clip.isNew ? "tag new" : "tag";
+      tag.textContent = clip.isNew ? "New" : "Import";
+      button.appendChild(tag);
+    }
+
+    var meta = document.createElement("div");
+    meta.className = "meta";
+    var when = document.createElement("b");
+    when.textContent = timeOfDay(clip.dateAdded);
+    var length = document.createElement("span");
+    length.textContent = duration(clip.durationMs);
+    meta.appendChild(when);
+    meta.appendChild(length);
+    button.appendChild(meta);
+
+    button.addEventListener("click", function () { open(clip); });
+    return button;
+  }
+
+  function open(clip) {
+    stopPolling();
+    titleEl.textContent = clip.name;
+    videoEl.src = "/api/clips/" + clip.id;
+    playerEl.hidden = false;
+    var playing = videoEl.play();
+    if (playing && playing.catch) { playing.catch(function () { /* needs a tap */ }); }
+  }
+
+  function close() {
+    videoEl.pause();
+    videoEl.removeAttribute("src");
+    videoEl.load();
+    playerEl.hidden = true;
+    titleEl.textContent = "";
+    startPolling();
+    refresh();
+  }
+
+  function merge(incoming) {
+    var added = 0;
+    incoming.forEach(function (clip) {
+      if (seen[clip.id]) { return; }
+      seen[clip.id] = true;
+      clip.isNew = firstLoadDone;
+      clips.push(clip);
+      added++;
+    });
+    if (added) {
+      clips.sort(function (a, b) { return b.dateAdded - a.dateAdded; });
+    }
+    return added;
+  }
+
+  function newestSeen() {
+    if (!clips.length) { return null; }
+    // DATE_ADDED has one-second resolution, so step back a touch rather than
+    // risk skipping a clip saved in the same second as the newest one we hold.
+    return Math.max(0, clips[0].dateAdded - 2);
+  }
+
+  function refresh(incremental) {
+    var since = incremental ? newestSeen() : null;
+    var url = "/api/clips" + (since === null ? "" : "?since=" + since);
+    return fetch(url, { credentials: "same-origin" })
+      .then(function (response) {
+        if (response.status === 401) { throw new Error("unauthorized"); }
+        if (!response.ok) { throw new Error("http " + response.status); }
+        return response.json();
+      })
+      .then(function (data) {
+        offlineEl.hidden = true;
+        var added = merge(data.clips || []);
+        if (added || !firstLoadDone) { render(); }
+        firstLoadDone = true;
+        bannerEl.hidden = data.mediaPermission !== false;
+        if (data.mediaPermission === false) {
+          bannerEl.textContent =
+            "Clips from an earlier install of the app are hidden. Grant the recorder " +
+            "permission to read videos to see all of them.";
+        }
+      })
+      .catch(function (error) {
+        offlineText.textContent = error && error.message === "unauthorized"
+          ? "This link expired. Scan the code on the recorder again."
+          : "Can't reach the recorder. Still on its Wi-Fi?";
+        offlineEl.hidden = false;
+      });
+  }
+
+  function startPolling() {
+    stopPolling();
+    pollTimer = setInterval(function () { refresh(true); }, POLL_MS);
+  }
+
+  function stopPolling() {
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  }
+
+  document.getElementById("close").addEventListener("click", close);
+  document.getElementById("retry").addEventListener("click", function () { refresh(); });
+
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) { stopPolling(); }
+    else if (playerEl.hidden) { startPolling(); refresh(true); }
+  });
+
+  window.addEventListener("keydown", function (event) {
+    if (event.key === "Escape" && !playerEl.hidden) { close(); }
+  });
+
+  refresh().then(startPolling);
+}());
+</script>
+</body>
+</html>

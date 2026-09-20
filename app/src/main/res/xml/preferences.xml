@@ -103,6 +103,16 @@
 
     </PreferenceCategory>
 
+    <PreferenceCategory android:title="Viewer Link"
+        android:order="450">
+
+        <Preference
+            android:key="viewer_link"
+            android:title="Viewer Link"
+            android:summary="Watch this phone\'s clips from another phone, without touching the tripod" />
+
+    </PreferenceCategory>
+
     <PreferenceCategory android:title="Developer"
         android:order="500">
 
