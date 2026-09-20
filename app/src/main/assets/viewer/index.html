@@ -35,14 +35,21 @@ background:linear-gradient(0deg,rgba(0,0,0,.78),rgba(0,0,0,0))}
 text-transform:uppercase;padding:2px 5px;border-radius:5px;background:rgba(0,0,0,.6);
 color:#d8d8dc}
 .tag.new{background:var(--new);color:#08130a}
-#empty,#banner{color:var(--dim);font-size:14px;padding:16px;text-align:center}
+#empty{color:var(--dim);font-size:14px;padding:16px;text-align:center;
+display:flex;align-items:center;justify-content:center;min-height:58vh}
+#banner{color:var(--dim);font-size:14px;padding:16px;text-align:center}
 #banner{margin:8px 16px 0;background:#241f14;color:#e8d9a8;border-radius:10px;
 text-align:left;font-size:13px;padding:10px 12px}
 #offline{position:fixed;left:16px;right:16px;bottom:16px;background:#2a1414;color:#f0c7c7;
 border-radius:10px;padding:12px 14px;display:flex;gap:12px;align-items:center;font-size:13px;
 z-index:20}
+/* Nothing has loaded yet, so there is no list to sit under: centre it rather than
+   stranding one line at the bottom of an empty screen. */
+#offline.first{top:50%;bottom:auto;transform:translateY(-50%);flex-direction:column;
+text-align:center;gap:14px;padding:22px 18px}
 #offline button{margin-left:auto;background:var(--accent);color:#fff;border:0;border-radius:8px;
 padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer}
+#offline.first button{margin-left:0}
 #player{position:fixed;inset:0;background:#000;z-index:30;display:flex;align-items:center;
 justify-content:center}
 #player video{width:100%;height:100%;object-fit:contain;background:#000}
@@ -248,6 +255,7 @@ color:#fff;font-size:13px;opacity:.85;overflow:hidden;text-overflow:ellipsis;whi
         offlineText.textContent = error && error.message === "unauthorized"
           ? "This link expired. Scan the code on the recorder again."
           : "Can't reach the recorder. Still on its Wi-Fi?";
+        offlineEl.classList.toggle("first", !firstLoadDone);
         offlineEl.hidden = false;
       });
   }
