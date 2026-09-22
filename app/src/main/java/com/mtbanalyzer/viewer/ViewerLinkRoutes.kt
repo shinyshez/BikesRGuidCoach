@@ -59,6 +59,14 @@ class ViewerLinkRoutes(
      * The QR points here with the token in the query. Setting it as a cookie and
      * redirecting keeps the token out of the address bar, out of screenshots, and out of
      * any link the viewer might share.
+     *
+     * SameSite must stay Lax, never Strict. A QR scanner opening the link is a navigation
+     * initiated by another app, which browsers treat as cross-site, and a Strict cookie is
+     * withheld on the redirect that follows -- so the viewer lands back on "/" with no
+     * query string and gets a 401. Pasting the same URL into the address bar works,
+     * because that counts as browser-initiated and therefore same-site, which is why this
+     * only ever showed up on a real phone. Lax still withholds the cookie from cross-site
+     * POSTs, subresource loads and iframes; the server is read-only anyway.
      */
     private fun page(request: HttpRequest): HttpResponse {
         if (tokenMatches(request.query[TOKEN_PARAM])) {
@@ -66,7 +74,7 @@ class ViewerLinkRoutes(
                 302,
                 mapOf(
                     "Location" to "/",
-                    "Set-Cookie" to "$COOKIE_NAME=$token; Path=/; HttpOnly; SameSite=Strict",
+                    "Set-Cookie" to "$COOKIE_NAME=$token; Path=/; HttpOnly; SameSite=Lax",
                     "Cache-Control" to "no-store"
                 )
             )
