@@ -91,6 +91,7 @@ jobs:
             rc=$?
             adb logcat -d '*:E' > logcat_errors.txt
             adb logcat -d DetectionTuning:* DETECTION_TUNING:* AndroidRuntime:* > logcat_app.txt
+            bash scripts/ci-stop-emulator.sh
             exit $rc
 
       - name: Upload Logcat
