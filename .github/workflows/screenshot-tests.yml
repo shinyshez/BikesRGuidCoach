@@ -54,7 +54,6 @@ jobs:
           key: avd-api29-x86_64-screenshots-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
           restore-keys: |
             avd-api29-x86_64-screenshots-
-            avd-api29-x86_64-
 
       - name: Build Debug APK
         run: ./gradlew assembleDebug
@@ -70,7 +69,7 @@ jobs:
           arch: x86_64
           force-avd-creation: false
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
-          disable-animations: true
+          disable-animations: false
           script: echo "Generated AVD snapshot for caching."
 
       - name: Run Emulator and Capture Screenshots
@@ -79,9 +78,17 @@ jobs:
           api-level: 29
           arch: x86_64
           force-avd-creation: false
-          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
-          disable-animations: true
-          script: bash scripts/capture-screenshots.sh screenshots
+          # -no-snapshot-load forces a real boot. Restoring the cached snapshot resumes in
+          # ~1.5s, so sys.boot_completed reads 1 off restored state while `settings`, `input`
+          # and the rest are still publishing -- and the action's only readiness gate is that
+          # one property, after which it fires `input keyevent 82` and dies with "No service
+          # published for: input". The AVD cache still saves image setup; only the resume goes.
+          emulator-options: -no-snapshot-load -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          # Unlock and animation-disabling move into the script, behind a readiness wait.
+          disable-animations: false
+          script: |
+            bash scripts/ci-await-emulator.sh
+            bash scripts/capture-screenshots.sh screenshots
 
       - name: Upload Screenshots
         if: always()

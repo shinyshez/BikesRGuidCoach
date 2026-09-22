@@ -15,4 +15,20 @@
         <item>optical_flow</item>
         <item>hybrid</item>
     </string-array>
+
+    <!-- Viewer Link -->
+    <string name="viewer_link_title">Viewer Link</string>
+    <string name="viewer_link_back">Back</string>
+    <string name="viewer_link_on">On — scan this from the other phone</string>
+    <string name="viewer_link_off">Off</string>
+    <string name="viewer_link_turn_on">Turn on</string>
+    <string name="viewer_link_turn_off">Turn off</string>
+    <string name="viewer_link_stop">Stop</string>
+    <string name="viewer_link_qr_description">QR code linking to this phone\'s clips</string>
+    <string name="viewer_link_hint_off">Turn on the phone\'s Wi-Fi hotspot, then turn this on. The other phone joins the hotspot and scans the code — no app needed on it.</string>
+    <string name="viewer_link_hint_on">Join this phone\'s hotspot on the other phone, then scan the code with its camera. The link stays up while the app is running.</string>
+    <string name="viewer_link_hint_no_media_permission">Clips from an earlier install stay hidden until this phone is allowed to read videos. Open the gallery to grant it.</string>
+    <string name="viewer_link_channel_name">Viewer Link</string>
+    <string name="viewer_link_channel_description">Shown while another phone can watch this phone\'s clips</string>
+    <string name="viewer_link_notification_title">Viewer Link is on</string>
 </resources>

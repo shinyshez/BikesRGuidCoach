@@ -96,7 +96,10 @@ for perm in CAMERA RECORD_AUDIO WRITE_EXTERNAL_STORAGE READ_EXTERNAL_STORAGE REA
 done
 sleep 2
 
-adb logcat -c
+# Best-effort, like the logcat reads below: clearing the buffer is a convenience, and
+# "failed to clear the 'main' log" is a transient logd condition that has killed an
+# entire capture run under `set -e` seconds after a clean install.
+adb logcat -c 2>/dev/null || { sleep 2; adb logcat -c 2>/dev/null || true; }
 
 # Always leave logs behind, even when a step fails (the workflow uploads $OUT on failure
 # too), plus a screenshot of whatever was on screen at the time.

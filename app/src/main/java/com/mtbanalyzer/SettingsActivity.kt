@@ -154,6 +154,15 @@ class SettingsActivity : AppCompatActivity() {
                 startActivity(android.content.Intent(requireContext(), ZoomTestActivity::class.java))
                 true
             }
+            findPreference<androidx.preference.Preference>("viewer_link")?.setOnPreferenceClickListener {
+                startActivity(
+                    android.content.Intent(
+                        requireContext(),
+                        com.mtbanalyzer.viewer.ViewerLinkActivity::class.java
+                    )
+                )
+                true
+            }
         }
         
         private fun showClearVideosDialog() {

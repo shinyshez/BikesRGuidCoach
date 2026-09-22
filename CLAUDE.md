@@ -213,6 +213,7 @@ consent dialog (`MediaStore.createDeleteRequest`).
 - **Recording Duration**: Set video length (default 8 seconds)
 - **Detection Sensitivity**: Adjust motion and pose detection thresholds
 - **Remote Control**: Enable Bluetooth remote control via volume buttons
+- **Viewer Link**: Serve this phone's clips to a second phone over the local network
 - **Performance Overlay**: Show detection performance metrics
 - **Orientation Support**: Settings screen adapts to device orientation
 
@@ -221,6 +222,43 @@ consent dialog (`MediaStore.createDeleteRequest`).
 When enabled in settings:
 - **Volume Up**: Start/stop manual recording
 - **Volume Down**: Toggle auto-record on/off
+
+### Viewer Link
+
+Lets a second phone browse and play this phone's clips while the recorder stays untouched on
+its tripod. Every push-based transfer needs a tap on the sending device, so the recorder runs
+a small read-only HTTP server and the viewer drives it.
+
+- **Settings › Viewer Link** turns it on and shows a QR code. Turn the phone's Wi-Fi hotspot
+  on first — Phase 1 does not provision the network itself
+- The viewer joins that hotspot and scans the code. **No app install on the viewer**: it is a
+  web page (`assets/viewer/index.html`), so an iPhone or a borrowed phone works
+- The page mirrors the gallery — 9:16 tiles grouped by day, time and duration, `import` tag —
+  and polls every 5s, so a run recorded after it is open appears on its own
+- A foreground service keeps the socket alive once the recorder's screen goes off; the
+  notification carries a Stop action. Off by default, and the server is never started on launch
+
+Implementation lives in `com.mtbanalyzer.viewer`. `ViewerLinkServer` is a hand-rolled
+HTTP/1.1 server (five read-only endpoints), `ViewerLinkRoutes` holds the API, `ClipCatalog`
+repeats the gallery's MediaStore query rather than sharing it so the viewer cannot regress
+the gallery.
+
+Two details worth knowing before changing any of it:
+
+- **`Range` support is load-bearing.** Without it a seek re-downloads the clip, and the
+  planned native viewer mode (media3 against `http://`) could not seek at all. `HttpRange`
+  is pure and heavily unit-tested; keep it that way
+- **A per-session token** is generated on every start, passed in the QR's query string, then
+  moved into an `HttpOnly` cookie. Plain HTTP on purpose: a self-signed cert on a local IP
+  trains people to click through browser warnings. Revisit if a write path is ever added
+- **Cleartext is only permitted in debug builds, and only to loopback**
+  (`app/src/debug/res/xml/network_security_config.xml`), for the instrumented test. The
+  server itself needs no exemption — the policy blocks outbound requests, not a
+  `ServerSocket`. A native viewer mode pointing media3 at `http://` *would* need a
+  production config scoped to private address ranges
+
+`ViewerLink-Phase1-Spec.md` has the full API contract, the security model and what is
+deliberately deferred (app-provisioned hotspot, native viewer mode, live preview).
 
 ## CI/CD and Verification
 

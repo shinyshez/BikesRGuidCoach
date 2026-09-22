@@ -70,6 +70,9 @@ dependencies {
     // Glide for image loading
     implementation("com.github.bumptech.glide:glide:4.16.0")
     
+    // QR code for the Viewer Link pairing screen (encode-only, pure Java)
+    implementation("com.google.zxing:core:3.5.3")
+
     // Coroutines for async operations
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     

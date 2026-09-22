@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Debug builds only.
+
+  The Viewer Link server itself is unaffected by the cleartext policy — it is a raw
+  ServerSocket accepting inbound connections, and the browser doing the viewing is a
+  different app with its own policy. What the policy does block is an *outbound* cleartext
+  request from this app's own HTTP stack, which is exactly what the instrumented test makes
+  when it drives the server over loopback.
+
+  Scoped to loopback and to the debug variant so the shipped app keeps the strict default.
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">127.0.0.1</domain>
+    </domain-config>
+</network-security-config>
