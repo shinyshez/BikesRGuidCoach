@@ -22,8 +22,9 @@ jobs:
     timeout-minutes: 30
     env:
       # The runner waits this long for the emulator to exit gracefully before killing it.
-      # A teardown that hung past the default 20s once ate the whole 30-minute job budget
-      # and got the job cancelled minutes after the tests had already passed.
+      # Trimmed from the default 20s so a shutdown that stalls costs seconds, not minutes.
+      # (It is not what stranded this job at 30 minutes -- see the -no-snapshot-load note
+      # below for that -- but there is no reason to sit through the longer default.)
       ANDROID_EMULATOR_WAIT_TIME_BEFORE_KILL: 5
 
     steps:
@@ -79,7 +80,12 @@ jobs:
           api-level: 29
           arch: x86_64
           force-avd-creation: false
-          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          # -no-snapshot-load forces a real boot. Restoring the cached snapshot resumes in
+          # ~1.5s, so sys.boot_completed reads 1 off restored state while `settings`, `input`
+          # and the rest are still publishing -- and the action's only readiness gate is that
+          # one property, after which it fires `input keyevent 82` and dies with "No service
+          # published for: input". The AVD cache still saves image setup; only the resume goes.
+          emulator-options: -no-snapshot-load -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           # Unlock and animation-disabling move into the script, behind a readiness wait.
           disable-animations: false
           script: |
