@@ -185,6 +185,10 @@ class ViewerLinkServerInstrumentedTest {
         val cookie = connection.getHeaderField("Set-Cookie")
         assertTrue(cookie, cookie.startsWith("${ViewerLinkRoutes.COOKIE_NAME}=$TOKEN"))
         assertTrue(cookie, cookie.contains("HttpOnly"))
+        // Lax, not Strict: a scanner app opening the QR link is cross-site as far as the
+        // browser is concerned, and a Strict cookie would be withheld on the redirect --
+        // leaving the viewer on "/" with a 401. See ViewerLinkRoutes.page().
+        assertTrue(cookie, cookie.contains("SameSite=Lax"))
     }
 
     @Test

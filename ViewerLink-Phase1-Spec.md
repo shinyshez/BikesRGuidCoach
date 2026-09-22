@@ -178,7 +178,9 @@ measures:
 - **Per-session token**, 128 bits from `SecureRandom`, base64url. Regenerated every time
   the server starts. Compared in constant time.
 - Accepted as `?t=` (required — a `<video src>` cannot set headers), then stored as an
-  `HttpOnly; SameSite=Strict` cookie so it stops appearing in URLs.
+  `HttpOnly; SameSite=Lax` cookie so it stops appearing in URLs. Lax rather than
+  Strict because a QR scanner opening the link counts as a cross-site navigation,
+  and a Strict cookie is withheld on the redirect that follows.
 - **Bind to the non-loopback local address only**, never `0.0.0.0` on a network the app did
   not expect. Reject requests whose `Host` header is not the address the QR advertised
   (cheap DNS-rebinding guard).
