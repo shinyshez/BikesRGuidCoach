@@ -13,6 +13,9 @@ class SettingsManager(context: Context) {
         private const val KEY_POST_RIDER_DELAY = "post_rider_delay"
         private const val KEY_HAPTIC_FEEDBACK = "haptic_feedback"
         private const val KEY_SOUND_FEEDBACK = "sound_feedback"
+        private const val KEY_START_CALLOUT = "start_callout"
+        // Not the key of the Settings row itself ("start_callout_sample"), which stores nothing
+        private const val KEY_START_CALLOUT_SAMPLE = "start_callout_sample_uri"
         private const val KEY_SHOW_POSE_OVERLAY = "show_pose_overlay"
         private const val KEY_DETECTOR_TYPE = "detector_type"
         private const val KEY_RIDER_DETECTION_ENABLED = "rider_detection_enabled"
@@ -29,6 +32,7 @@ class SettingsManager(context: Context) {
         private const val DEFAULT_POST_RIDER_DELAY = 2
         private const val DEFAULT_HAPTIC_FEEDBACK = true
         private const val DEFAULT_SOUND_FEEDBACK = false
+        private const val DEFAULT_START_CALLOUT = false
         private const val DEFAULT_SHOW_POSE_OVERLAY = true
         private const val DEFAULT_DETECTOR_TYPE = "pose"
         private const val DEFAULT_RIDER_DETECTION_ENABLED = false
@@ -73,6 +77,27 @@ class SettingsManager(context: Context) {
         return sharedPreferences.getBoolean(KEY_SOUND_FEEDBACK, DEFAULT_SOUND_FEEDBACK)
     }
     
+    /** Whether a spoken callout ("Dropping") replaces the beep when a recording starts. */
+    fun isStartCalloutEnabled(): Boolean {
+        return sharedPreferences.getBoolean(KEY_START_CALLOUT, DEFAULT_START_CALLOUT)
+    }
+
+    /** The user's own callout clip, or null when the bundled sample should be used. */
+    fun getStartCalloutSample(): String? {
+        return sharedPreferences.getString(KEY_START_CALLOUT_SAMPLE, null)?.takeIf { it.isNotBlank() }
+    }
+
+    /** Stores a picked audio file as the callout clip; null goes back to the bundled sample. */
+    fun setStartCalloutSample(uri: String?) {
+        val editor = sharedPreferences.edit()
+        if (uri.isNullOrBlank()) {
+            editor.remove(KEY_START_CALLOUT_SAMPLE)
+        } else {
+            editor.putString(KEY_START_CALLOUT_SAMPLE, uri)
+        }
+        editor.apply()
+    }
+
     fun shouldShowPoseOverlay(): Boolean {
         return sharedPreferences.getBoolean(KEY_SHOW_POSE_OVERLAY, DEFAULT_SHOW_POSE_OVERLAY)
     }

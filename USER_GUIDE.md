@@ -61,6 +61,14 @@ Delete unwanted videos using swipe gesture:
 - **Duration**: How long to record (default 8 seconds)
 - **Post-Rider Delay**: Extra recording after rider leaves
 
+#### Feedback
+- **Haptic Feedback**: Vibrate when recording starts/stops
+- **Sound Feedback**: Beep on recording start/stop/error
+- **Start Callout**: Play a voice clip when recording starts, in place of the start beep
+  - **Callout Sample** picks the clip: tap to play it, choose an audio file from the device
+    (a recording of someone calling "dropping" works well), or go back to the built-in one
+  - With the callout on but no clip chosen, the start beep plays as before
+
 #### Remote Control
 - Enable Bluetooth remote to use volume buttons:
   - Volume Up: Start/stop recording

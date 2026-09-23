@@ -2,11 +2,15 @@ package com.mtbanalyzer
 
 import android.content.ContentResolver
 import android.content.ContentUris
+import android.content.Intent
 import android.content.res.Configuration
+import android.net.Uri
 import android.os.Bundle
 import android.provider.MediaStore
+import android.provider.OpenableColumns
 import android.util.Log
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.preference.PreferenceFragmentCompat
@@ -54,13 +58,21 @@ class SettingsActivity : AppCompatActivity() {
     class SettingsFragment : PreferenceFragmentCompat() {
         private lateinit var settingsManager: SettingsManager
         private lateinit var detectorManager: RiderDetectorManager
+        private lateinit var soundManager: SoundManager
         private var detectorConfigCategory: PreferenceCategory? = null
+
+        /** Picks the user's own callout clip; the read permission is persisted below. */
+        private val pickCalloutSample =
+            registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+                if (uri != null) useCalloutSample(uri)
+            }
         
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
             setPreferencesFromResource(R.xml.preferences, rootKey)
             
             // Initialize managers
             settingsManager = SettingsManager(requireContext())
+            soundManager = SoundManager(requireContext())
             detectorManager = RiderDetectorManager(requireContext(), settingsManager)
             detectorManager.initialize()
             
@@ -141,6 +153,12 @@ class SettingsActivity : AppCompatActivity() {
                 true
             }
             
+            findPreference<Preference>("start_callout_sample")?.setOnPreferenceClickListener {
+                showCalloutSampleDialog()
+                true
+            }
+            updateCalloutSampleSummary()
+
             findPreference<androidx.preference.Preference>("clear_cache")?.setOnPreferenceClickListener {
                 showClearVideosDialog()
                 true
@@ -165,6 +183,82 @@ class SettingsActivity : AppCompatActivity() {
             }
         }
         
+        override fun onDestroy() {
+            super.onDestroy()
+            if (::soundManager.isInitialized) soundManager.release()
+        }
+
+        /** Play the callout, swap in another audio file, or go back to the bundled clip. */
+        private fun showCalloutSampleDialog() {
+            val hasSample = soundManager.calloutSample() != null
+            val hasCustom = settingsManager.getStartCalloutSample() != null
+            val actions = mutableListOf<Pair<String, () -> Unit>>()
+            if (hasSample) {
+                actions += "Play sample" to {
+                    if (!soundManager.playCalloutPreview()) {
+                        Toast.makeText(requireContext(), "Could not play that sample", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+            actions += "Choose audio file\u2026" to { pickCalloutSample.launch(arrayOf("audio/*")) }
+            if (hasCustom) {
+                val builtIn = soundManager.bundledCallout() != null
+                actions += (if (builtIn) "Use built-in sample" else "Clear sample") to { useCalloutSample(null) }
+            }
+
+            AlertDialog.Builder(requireContext())
+                .setTitle("Callout Sample")
+                .setItems(actions.map { it.first }.toTypedArray()) { _, which -> actions[which].second() }
+                .setNegativeButton("Cancel", null)
+                .show()
+        }
+
+        /** Stores [uri] as the callout clip, or falls back to the bundled one when null. */
+        private fun useCalloutSample(uri: Uri?) {
+            if (uri != null) {
+                try {
+                    requireContext().contentResolver
+                        .takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                } catch (e: SecurityException) {
+                    // Not every provider offers a persistable grant; the clip still plays this session
+                    Log.w("SettingsFragment", "Could not persist read access to $uri", e)
+                }
+            }
+            settingsManager.setStartCalloutSample(uri?.toString())
+            updateCalloutSampleSummary()
+            Toast.makeText(
+                requireContext(),
+                if (uri != null) "Callout sample updated" else "Using the built-in sample",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+
+        private fun updateCalloutSampleSummary() {
+            findPreference<Preference>("start_callout_sample")?.summary = calloutSampleSummary()
+        }
+
+        private fun calloutSampleSummary(): String {
+            val custom = settingsManager.getStartCalloutSample()
+            return when {
+                custom != null -> sampleDisplayName(Uri.parse(custom)) ?: "Your own clip"
+                soundManager.bundledCallout() != null -> "Built-in \"Dropping\" sample"
+                else -> "No sample yet \u2014 tap to choose an audio file"
+            }
+        }
+
+        /** The picked file's name, for the preference summary. */
+        private fun sampleDisplayName(uri: Uri): String? {
+            return try {
+                requireContext().contentResolver
+                    .query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+                    ?.use { if (it.moveToFirst() && !it.isNull(0)) it.getString(0) else null }
+                    ?: uri.lastPathSegment
+            } catch (e: Exception) {
+                Log.w("SettingsFragment", "Could not read the name of $uri", e)
+                uri.lastPathSegment
+            }
+        }
+
         private fun showClearVideosDialog() {
             AlertDialog.Builder(requireContext())
                 .setTitle("Clear All Videos")
