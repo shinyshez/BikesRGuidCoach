@@ -3,6 +3,7 @@ package com.mtbanalyzer.viewer
 import android.content.Context
 import android.util.Base64
 import android.util.Log
+import com.mtbanalyzer.clips.LocalClipSource
 import java.security.SecureRandom
 import java.util.concurrent.CopyOnWriteArrayList
 
@@ -56,7 +57,7 @@ object ViewerLinkController {
         val token = newToken()
         val routes = ViewerLinkRoutes(
             context = app,
-            catalog = ClipCatalog(app),
+            clips = LocalClipSource(app),
             thumbnails = ClipThumbnails(app),
             token = token,
             allowedHosts = setOf(host, "localhost", "127.0.0.1")

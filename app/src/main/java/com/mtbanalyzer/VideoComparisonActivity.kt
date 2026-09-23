@@ -31,6 +31,9 @@ class VideoComparisonActivity : AppCompatActivity() {
         const val EXTRA_VIDEO1_NAME = "video1_name"
         const val EXTRA_VIDEO2_URI = "video2_uri"
         const val EXTRA_VIDEO2_NAME = "video2_name"
+        /** [com.mtbanalyzer.clips.ClipRef.key] of each clip, which keys the remembered sync. */
+        const val EXTRA_VIDEO1_KEY = "video1_key"
+        const val EXTRA_VIDEO2_KEY = "video2_key"
 
         private const val UI_UPDATE_MS = 100L
         private const val SYNC_CHECK_MS = 300L
@@ -131,8 +134,11 @@ class VideoComparisonActivity : AppCompatActivity() {
             return
         }
 
-        pairId1 = uri1.lastPathSegment ?: uri1.toString()
-        pairId2 = uri2.lastPathSegment ?: uri2.toString()
+        // Keyed on ClipRef.key, never the Uri: a remote clip's http://…/api/clips/1337 ends
+        // in the same segment as local clip 1337. Without a key (an older caller) fall back to
+        // the last segment, which is what a local key is.
+        pairId1 = intent.getStringExtra(EXTRA_VIDEO1_KEY) ?: uri1.lastPathSegment ?: uri1.toString()
+        pairId2 = intent.getStringExtra(EXTRA_VIDEO2_KEY) ?: uri2.lastPathSegment ?: uri2.toString()
         val saved = syncStore.load(pairId1, pairId2)
         isLocked = saved.locked
         positionOffset = saved.offsetMs

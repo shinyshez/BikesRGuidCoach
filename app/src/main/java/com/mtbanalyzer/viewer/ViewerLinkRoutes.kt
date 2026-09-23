@@ -4,6 +4,8 @@ import android.content.Context
 import android.media.MediaMetadataRetriever
 import android.os.Build
 import android.util.Log
+import com.mtbanalyzer.clips.ClipInfo
+import com.mtbanalyzer.clips.LocalClipSource
 import java.io.FileInputStream
 import java.io.InputStream
 import java.io.OutputStream
@@ -17,7 +19,7 @@ import java.util.concurrent.ConcurrentHashMap
  */
 class ViewerLinkRoutes(
     private val context: Context,
-    private val catalog: ClipCatalog,
+    private val clips: LocalClipSource,
     private val thumbnails: ClipThumbnails,
     private val token: String,
     private val allowedHosts: Set<String>
@@ -98,7 +100,7 @@ class ViewerLinkRoutes(
     private fun health(): HttpResponse {
         val payload = buildString {
             append("{\"ok\":true,\"device\":").append(Json.string(Build.MODEL ?: "Android"))
-            append(",\"clips\":").append(catalog.list().size)
+            append(",\"clips\":").append(finishedClips().size)
             append(",\"apiVersion\":").append(API_VERSION).append('}')
         }
         return HttpResponse.json(200, payload, mapOf("Cache-Control" to "no-store"))
@@ -107,7 +109,9 @@ class ViewerLinkRoutes(
     private fun clips(request: HttpRequest): HttpResponse {
         val since = request.query["since"]?.toLongOrNull()
         return HttpResponse.json(
-            200, catalog.listJson(since), mapOf("Cache-Control" to "no-store")
+            200,
+            clipListJson(finishedClips(since), clips.hasFullMediaAccess()),
+            mapOf("Cache-Control" to "no-store")
         )
     }
 
@@ -134,13 +138,13 @@ class ViewerLinkRoutes(
 
     private fun meta(id: Long): HttpResponse {
         metaCache[id]?.let { return HttpResponse.json(200, it) }
-        val clip = catalog.find(id) ?: return HttpResponse.error(404, "Unknown clip")
+        val clip = clips.find(id) ?: return HttpResponse.error(404, "Unknown clip")
 
         var frameRate = 0.0
         var frameCount = 0L
         val retriever = MediaMetadataRetriever()
         try {
-            retriever.setDataSource(context, catalog.uriFor(id))
+            retriever.setDataSource(context, LocalClipSource.uriFor(id))
             frameRate = retriever
                 .extractMetadata(MediaMetadataRetriever.METADATA_KEY_CAPTURE_FRAMERATE)
                 ?.toDoubleOrNull() ?: 0.0
@@ -174,7 +178,7 @@ class ViewerLinkRoutes(
      * re-downloads the whole file, and Phase 2's ExoPlayer would refuse to seek at all.
      */
     private fun media(request: HttpRequest, id: Long): HttpResponse {
-        catalog.find(id) ?: return HttpResponse.error(404, "Unknown clip")
+        clips.find(id) ?: return HttpResponse.error(404, "Unknown clip")
         val total = fileLength(id) ?: return HttpResponse.error(404, "Clip unavailable")
 
         val common = linkedMapOf(
@@ -211,6 +215,18 @@ class ViewerLinkRoutes(
 
     // --- helpers --------------------------------------------------------------------
 
+    /** Never a recording still being written. No permission reads as an empty list. */
+    private fun finishedClips(since: Long? = null): List<ClipInfo> =
+        try {
+            clips.list(since, finishedOnly = true)
+        } catch (e: SecurityException) {
+            Log.w(TAG, "No permission to list videos", e)
+            emptyList()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to list videos", e)
+            emptyList()
+        }
+
     private fun authorized(request: HttpRequest, block: () -> HttpResponse): HttpResponse {
         val supplied = request.query[TOKEN_PARAM] ?: request.cookie(COOKIE_NAME)
         return if (tokenMatches(supplied)) block() else HttpResponse.error(401, "Unauthorized")
@@ -231,7 +247,7 @@ class ViewerLinkRoutes(
 
     private fun fileLength(id: Long): Long? =
         try {
-            context.contentResolver.openFileDescriptor(catalog.uriFor(id), "r")?.use { pfd ->
+            context.contentResolver.openFileDescriptor(LocalClipSource.uriFor(id), "r")?.use { pfd ->
                 val size = pfd.statSize
                 if (size >= 0) size else null
             }
@@ -241,7 +257,7 @@ class ViewerLinkRoutes(
         }
 
     private fun stream(id: Long, start: Long, length: Long, out: OutputStream) {
-        context.contentResolver.openFileDescriptor(catalog.uriFor(id), "r")?.use { pfd ->
+        context.contentResolver.openFileDescriptor(LocalClipSource.uriFor(id), "r")?.use { pfd ->
             FileInputStream(pfd.fileDescriptor).use { input ->
                 if (start > 0) input.channel.position(start)
                 copy(input, out, length)

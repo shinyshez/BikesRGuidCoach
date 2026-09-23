@@ -1,5 +1,7 @@
 package com.mtbanalyzer.viewer
 
+import com.mtbanalyzer.clips.ClipInfo
+import com.mtbanalyzer.clips.ClipNaming
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -35,7 +37,7 @@ class ClipPayloadTest {
 
     @Test
     fun `clip serialises every field the viewer reads`() {
-        val json = ClipDto(
+        val json = ClipInfo(
             id = 42,
             name = "odd\"name.mp4",
             dateAdded = 1758378667,
@@ -51,5 +53,16 @@ class ClipPayloadTest {
         assertTrue(json, json.contains("\"durationMs\":8012"))
         assertTrue(json, json.contains("\"sizeBytes\":9437184"))
         assertTrue(json, json.contains("\"kind\":\"import\""))
+    }
+
+    @Test
+    fun `clip list carries the clips in order and the permission flag`() {
+        val clip = { id: Long -> ClipInfo(id, "MTB_$id.mp4", 0, 0, 0, ClipNaming.KIND_IMPORT) }
+        val json = clipListJson(listOf(clip(2), clip(1)), mediaPermission = false)
+
+        assertTrue(json, json.startsWith("{\"clips\":[{\"id\":2,"))
+        assertTrue(json, json.contains("},{\"id\":1,"))
+        assertTrue(json, json.endsWith("],\"mediaPermission\":false}"))
+        assertEquals("{\"clips\":[],\"mediaPermission\":true}", clipListJson(emptyList(), true))
     }
 }

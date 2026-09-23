@@ -8,6 +8,7 @@ import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.bumptech.glide.request.RequestOptions
+import com.mtbanalyzer.clips.ClipNaming
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -34,8 +35,6 @@ class GalleryAdapter(
     companion object {
         const val TYPE_HEADER = 0
         const val TYPE_CLIP = 1
-        /** Recordings are named MTB_yyyy-MM-dd-HH-mm-ss-SSS.mp4; anything else came in via import. */
-        private val RECORDING_NAME = Regex("""^MTB_\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}-\d{3}\.mp4$""")
 
         fun dayLabel(dateAddedSeconds: Long, now: Calendar = Calendar.getInstance()): String {
             val then = Calendar.getInstance().apply { timeInMillis = dateAddedSeconds * 1000 }
@@ -49,7 +48,7 @@ class GalleryAdapter(
             return SimpleDateFormat(pattern, Locale.getDefault()).format(then.time)
         }
 
-        fun isImport(displayName: String) = !RECORDING_NAME.matches(displayName)
+        fun isImport(displayName: String) = ClipNaming.kindOf(displayName) == ClipNaming.KIND_IMPORT
 
         /** Groups a newest-first list into day headers and clips. */
         fun buildRows(videos: List<VideoItem>): List<Row> {

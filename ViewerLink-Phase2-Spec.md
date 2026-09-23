@@ -3,7 +3,7 @@
 Make the viewing phone the real app: remote clips in the actual gallery and
 `VideoPlayerView`, with the pose overlay, drawing and side-by-side comparison.
 
-**Status**: draft. The cleartext spike (§4) is implemented and has tests; nothing else is built.
+**Status**: draft. Built so far: the cleartext spike (§4) and M0 (§9: `ClipRef`, `LocalClipSource`).
 **Builds on**: `ViewerLink-Phase1-Spec.md` (API contract, security model).
 **Roadmap**: `ViewerLink-Roadmap.html`.
 
@@ -117,6 +117,12 @@ Phase 2 would do. A `ClipSource` interface has `LocalClipSource` (the MediaStore
 **one** implementation shared by the gallery and the server) and `RemoteClipSource`
 (`/api/clips` through `ViewerHttpClient`). Merging the queries is the riskiest change
 to the gallery in this phase, so it lands on its own, first, with tests (§9, M0).
+
+*As built in M0:* the callers differ in one flag. The server lists with `finishedOnly = true`
+(no `IS_PENDING` rows, and pre-Q no zero-duration rows, as `ClipCatalog` did); the gallery
+and capture strip list every row, as they always have. The pre-Q duration test would
+otherwise hide imports on API 24–28, which are inserted with no `DURATION`. The `ClipSource`
+interface arrives with its second implementation in M1.
 
 **Id collisions are real.** `VideoComparisonActivity.kt:134` keys `CompareSyncStore` on
 `uri.lastPathSegment`. For `http://…/api/clips/1337` that is `"1337"`, the same key as

@@ -10,7 +10,6 @@ import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
 import android.view.WindowManager
-import android.provider.MediaStore
 import android.util.Log
 import android.view.KeyEvent
 import android.view.View
@@ -22,6 +21,7 @@ import androidx.camera.view.PreviewView
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.preference.PreferenceManager
+import com.mtbanalyzer.clips.LocalClipSource
 import com.mtbanalyzer.detector.RiderDetectorManager
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -212,47 +212,20 @@ class MainActivity : AppCompatActivity(),
     
     /** Today's MTB_ clips, newest first, for the strip above the record button. */
     private fun loadRecentClips() {
-        val clips = mutableListOf<VideoItem>()
-        try {
-            val projection = arrayOf(
-                MediaStore.Video.Media._ID,
-                MediaStore.Video.Media.DISPLAY_NAME,
-                MediaStore.Video.Media.DATE_ADDED,
-                MediaStore.Video.Media.DURATION,
-                MediaStore.Video.Media.SIZE
-            )
-            val todayStart = Calendar.getInstance().apply {
-                set(Calendar.HOUR_OF_DAY, 0)
-                set(Calendar.MINUTE, 0)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }.timeInMillis / 1000 // MediaStore uses seconds
-            val selection = "${MediaStore.Video.Media.DISPLAY_NAME} LIKE ? AND ${MediaStore.Video.Media.DATE_ADDED} >= ?"
-            val selectionArgs = arrayOf("MTB_%", todayStart.toString())
-            contentResolver.query(
-                MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
-                projection, selection, selectionArgs,
-                "${MediaStore.Video.Media.DATE_ADDED} DESC"
-            )?.use { cursor ->
-                val idCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media._ID)
-                val nameCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DISPLAY_NAME)
-                val dateCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_ADDED)
-                val durCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DURATION)
-                val sizeCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.SIZE)
-                while (cursor.moveToNext() && clips.size < 30) {
-                    val id = cursor.getLong(idCol)
-                    clips.add(VideoItem(
-                        id = id,
-                        uri = android.content.ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, id),
-                        displayName = cursor.getString(nameCol) ?: "MTB_$id.mp4",
-                        dateAdded = cursor.getLong(dateCol),
-                        duration = cursor.getLong(durCol),
-                        size = cursor.getLong(sizeCol)
-                    ))
-                }
-            }
+        val todayStart = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis / 1000 // MediaStore uses seconds
+        val clips = try {
+            // since is exclusive, so step back a second to keep a clip saved at midnight
+            LocalClipSource(this).list(sinceEpochSeconds = todayStart - 1)
+                .take(30)
+                .map { VideoItem.from(it) }
         } catch (e: Exception) {
             Log.e(TAG, "Error loading today's clips", e)
+            emptyList()
         }
         val known = knownClipIds ?: clips.map { it.id }.toSet().also { knownClipIds = it }
         val newIds = clips.map { it.id }.filterNot { it in known }.toSet()

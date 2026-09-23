@@ -312,7 +312,7 @@ artifact and no camera dependency. Render the `BitMatrix` to a `Bitmap` directly
 
 `VideoGalleryActivity` is deliberately **not** touched in Phase 1 — `ClipCatalog`
 duplicates its query rather than refactoring it, so the feature cannot regress the gallery.
-Phase 2 collapses the two.
+Phase 2 collapses the two (done in Phase 2 M0: `clips/LocalClipSource.kt`).
 
 ## 11. Testing
 

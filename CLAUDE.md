@@ -239,9 +239,12 @@ a small read-only HTTP server and the viewer drives it.
   notification carries a Stop action. Off by default, and the server is never started on launch
 
 Implementation lives in `com.mtbanalyzer.viewer`. `ViewerLinkServer` is a hand-rolled
-HTTP/1.1 server (five read-only endpoints), `ViewerLinkRoutes` holds the API, `ClipCatalog`
-repeats the gallery's MediaStore query rather than sharing it so the viewer cannot regress
-the gallery.
+HTTP/1.1 server (five read-only endpoints), `ViewerLinkRoutes` holds the API. The clip list
+comes from `clips.LocalClipSource`, the one MediaStore query shared with the gallery and the
+capture strip; the server passes `finishedOnly = true` so it never serves a recording still
+being written, while the gallery lists every row as it always has. Anything persisted against
+a clip (compare sync) is keyed on `ClipRef.key`, never a Uri: a remote clip's URL ends in the
+same id as an unrelated local clip.
 
 Two details worth knowing before changing any of it:
 

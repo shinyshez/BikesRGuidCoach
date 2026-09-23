@@ -21,6 +21,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.mtbanalyzer.VideoImporter
+import com.mtbanalyzer.clips.LocalClipSource
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
@@ -88,7 +89,7 @@ class RemoteClipPlaybackInstrumentedTest {
 
         val routes = ViewerLinkRoutes(
             context = context,
-            catalog = ClipCatalog(context),
+            clips = LocalClipSource(context),
             thumbnails = ClipThumbnails(context),
             token = TOKEN,
             allowedHosts = setOf(address.hostAddress!!)
