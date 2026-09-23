@@ -154,10 +154,17 @@ footer a{color:var(--accent)}
         <li>Server-sent events, so a new clip appears the instant it is saved instead of up
         to 5s later.</li>
       </ul>
-      <p class="note"><b>Known obstacle, documented rather than discovered late:</b>
-      pointing media3 at <code>http://</code> will be refused by the cleartext policy. It
-      needs a production network security config scoped to private address ranges. Today's
-      exemption is debug-only and loopback-only.</p>
+      <p class="note"><b>The cleartext obstacle is settled:</b>
+      media3's stock HTTP stack is refused by the cleartext policy, and a network security
+      config cannot name "any private address" (no CIDR, and hotspot subnets move). So the
+      viewer talks to the recorder over a raw socket, which the policy does not govern:
+      <code>ViewerHttpClient</code> + <code>RemoteClipDataSource</code>, with an instrumented
+      test that plays and seeks a clip under the release policy. The shipped app keeps the
+      strict default.</p>
+      <p class="note"><b>Plan:</b> stream to play, download to analyse (the pose overlay
+      reads frames from a cached file), and a <code>ClipRef</code> model so local and remote
+      clips can be compared side by side. Five milestones, the first of which touches only
+      the gallery's MediaStore query. See <code>ViewerLink-Phase2-Spec.md</code>.</p>
     </div>
   </div>
 
@@ -263,7 +270,8 @@ footer a{color:var(--accent)}
 <footer>
   Phase 1 shipped in <a href="https://github.com/shinyshez/BikesRGuidCoach/pull/8">#8</a>.
   Full API contract, security model and test plan:
-  <code>ViewerLink-Phase1-Spec.md</code>.
+  <code>ViewerLink-Phase1-Spec.md</code>. Phase 2 design and milestones:
+  <code>ViewerLink-Phase2-Spec.md</code>.
 </footer>
 
 </div>

@@ -254,12 +254,18 @@ Two details worth knowing before changing any of it:
 - **Cleartext is only permitted in debug builds, and only to loopback**
   (`app/src/debug/res/xml/network_security_config.xml`), for the instrumented test. The
   server itself needs no exemption — the policy blocks outbound requests, not a
-  `ServerSocket`. A native viewer mode pointing media3 at `http://` *would* need a
-  production config scoped to private address ranges
+  `ServerSocket`. Do not "fix" the viewer side with a config either: a `<domain-config>` can't
+  express private ranges (no CIDR), so the native viewer goes through `ViewerHttpClient`, a
+  raw-socket client the policy does not govern, and `RemoteClipDataSource` for media3.
+  `RemoteClipPlaybackInstrumentedTest` proves it on the device's non-loopback address, where
+  the release policy applies. Anything else that fetches from the recorder (Glide thumbnails
+  included) must use that client too
 
 `ViewerLink-Phase1-Spec.md` has the full API contract, the security model and what is
 deliberately deferred (app-provisioned hotspot, native viewer mode, live preview).
-`ViewerLink-Roadmap.html` is the phase plan at a glance — what Phase 2 (next) and Phase 3
+`ViewerLink-Phase2-Spec.md` is the draft design for the native viewer mode: the cleartext
+resolution, stream-to-play / download-to-analyse, `ClipRef` for local vs remote clips, SSE, and
+milestones M0–M4. `ViewerLink-Roadmap.html` is the phase plan at a glance — what Phase 2 (next) and Phase 3
 buy, which Phase 1 decisions exist only to pay for them, and why the app-provisioned
 hotspot is parked. Open it in a browser; it needs no network.
 
