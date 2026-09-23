@@ -3,8 +3,9 @@
 Let a second phone browse and play clips from the tripod phone, over a local network,
 without touching the tripod phone.
 
-**Status**: proposed, not implemented.
+**Status**: implemented and merged.
 **Scope**: Phase 1 only — the recorder serves, the viewer uses a web browser.
+**Roadmap**: `ViewerLink-Roadmap.html` summarises §3 as a phase plan.
 
 ---
 
