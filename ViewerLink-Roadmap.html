@@ -52,7 +52,7 @@ h1{font-size:28px;line-height:1.2;margin:0 0 8px;font-weight:660;letter-spacing:
 .done .dot{background:var(--done);box-shadow:0 0 0 2px var(--done)}
 .next .dot{background:var(--next);box-shadow:0 0 0 2px var(--next)}
 .later .dot{background:transparent;box-shadow:0 0 0 2px var(--off)}
-.no .dot{background:transparent;box-shadow:0 0 0 2px var(--off);opacity:.55}
+.no .dot,.parked .dot{background:transparent;box-shadow:0 0 0 2px var(--off);opacity:.55}
 
 .body{padding:18px 0 10px;min-width:0}
 .head{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px;margin-bottom:6px}
@@ -62,7 +62,8 @@ h2{font-size:19px;margin:0;font-weight:640;letter-spacing:-.1px}
 .done .pill{background:var(--done);color:var(--bg)}
 .next .pill{background:var(--next);color:var(--bg)}
 .later .pill{border:1px solid var(--off);color:var(--dim)}
-.no .pill{border:1px solid var(--off);color:var(--dim);opacity:.8}
+.no .pill,.parked .pill{border:1px solid var(--off);color:var(--dim);opacity:.8}
+.parked h2,.no h2{color:var(--dim)}
 .what{color:var(--dim);font-size:14px;margin:0 0 12px}
 .body ul{margin:0 0 12px;padding-left:20px}
 .body li{margin-bottom:7px}
@@ -105,8 +106,9 @@ footer a{color:var(--accent)}
 <header>
   <h1>Viewer Link — roadmap</h1>
   <p class="lede">A second phone reviews runs while the recording phone stays untouched on
-  its tripod. Phase 1 ships that; the later phases remove the setup friction and make the
-  viewer a first-class part of the app.</p>
+  its tripod. Phase 1 ships that. Phase 2 is next: it makes the viewing phone the real app
+  rather than a web page, which is the only thing that changes what a coach can actually
+  do with a clip.</p>
   <p class="srcline">Source of truth for Phase 1's contract and security model:
   <code>ViewerLink-Phase1-Spec.md</code> — this page summarises §3 and the decisions that
   shape what comes after.</p>
@@ -133,31 +135,16 @@ footer a{color:var(--accent)}
         off, with a Stop action in the notification.</li>
       </ul>
       <p class="note"><b>Both phones must already be on the same network.</b> You turn the
-      phone's hotspot on yourself before mounting the tripod. That is the one manual step
-      Phase 1.5 removes.</p>
+      phone's hotspot on yourself before mounting the tripod — a one-time step before the
+      phone is mounted, so it does not violate "don't touch the recorder". Automating it
+      was considered and parked; see below.</p>
     </div>
   </div>
 
   <div class="phase next">
     <div class="marker"><div class="dot"></div></div>
     <div class="body">
-      <div class="head"><h2>Phase 1.5 — one-scan join</h2><span class="pill">Next</span></div>
-      <p class="what">The app provisions the network itself.</p>
-      <ul>
-        <li>Local-only hotspot via <code>startLocalOnlyHotspot</code>.</li>
-        <li>SSID and passphrase go into the QR payload, so the viewer joins the network
-        <em>and</em> opens the page in a single scan.</li>
-      </ul>
-      <p class="note">Small and self-contained: it changes only how the two phones end up
-      on the same subnet — <b>not a line of the server or the API</b>. That is precisely
-      why it was safe to defer, and why it is the natural next step.</p>
-    </div>
-  </div>
-
-  <div class="phase later">
-    <div class="marker"><div class="dot"></div></div>
-    <div class="body">
-      <div class="head"><h2>Phase 2 — native viewer mode</h2><span class="pill">Later</span></div>
+      <div class="head"><h2>Phase 2 — native viewer mode</h2><span class="pill">Next</span></div>
       <p class="what">The viewing phone stops being a web page and becomes the real app.</p>
       <ul>
         <li>Remote clips appear in the actual gallery and <code>VideoPlayerView</code>,
@@ -187,6 +174,37 @@ footer a{color:var(--accent)}
       deliberate Phase 1 decisions up for review: the plain-HTTP-plus-token security model,
       and the hand-rolled HTTP server (the spec suggests considering Ktor CIO at that
       point).</p>
+    </div>
+  </div>
+
+  <div class="phase parked">
+    <div class="marker"><div class="dot"></div></div>
+    <div class="body">
+      <div class="head"><h2>Phase 1.5 — app-provisioned hotspot</h2><span class="pill">Parked</span></div>
+      <p class="what">Considered, and not worth what it costs.</p>
+      <p class="what">The idea was <code>startLocalOnlyHotspot</code> with the SSID and
+      passphrase in the QR, so the viewer joins by scanning instead of picking the hotspot
+      and typing a passphrase.</p>
+      <ul>
+        <li><b>It cannot deliver the "one scan" it was sold on.</b> A QR carries one
+        payload and the scanner dispatches on its scheme: <code>WIFI:</code> joins a
+        network, <code>http://</code> opens a page. There is no field in the Wi-Fi format
+        for a URL, so it is two codes and two scans on every platform. What is left is a
+        saved passphrase entry.</li>
+        <li><b>Some devices kill a local-only hotspot when the app backgrounds</b> — which
+        attacks the core requirement directly. The recorder sits untouched with its screen
+        off for a whole session; a system hotspot survives that, an app-provisioned one may
+        not, on hardware you cannot enumerate in advance.</li>
+        <li>Some devices require Location to be on; passphrase retrieval differs across API
+        26/28/30. It is the single biggest source of OEM-specific behaviour in the design.</li>
+        <li>A local-only hotspot has <b>no upstream</b>, so an iPhone viewer shows "no
+        internet connection" and may drift back to cellular. A shared hotspot has none of
+        that — this is cost the manual route does not carry.</li>
+      </ul>
+      <p class="note">There is no cheap half-measure either: the app cannot read the
+      current hotspot's SSID and passphrase to build a join-QR for it, because
+      <code>getWifiApConfiguration()</code> has been restricted since API 26. It is the
+      full local-only hotspot or nothing.</p>
     </div>
   </div>
 
