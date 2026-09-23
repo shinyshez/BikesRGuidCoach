@@ -259,9 +259,9 @@ Two details worth knowing before changing any of it:
 
 `ViewerLink-Phase1-Spec.md` has the full API contract, the security model and what is
 deliberately deferred (app-provisioned hotspot, native viewer mode, live preview).
-`ViewerLink-Roadmap.html` is the phase plan at a glance — what Phase 1.5, 2 and 3 buy, and
-which Phase 1 decisions exist only to pay for them. Open it in a browser; it needs no
-network.
+`ViewerLink-Roadmap.html` is the phase plan at a glance — what Phase 2 (next) and Phase 3
+buy, which Phase 1 decisions exist only to pay for them, and why the app-provisioned
+hotspot is parked. Open it in a browser; it needs no network.
 
 ## CI/CD and Verification
 

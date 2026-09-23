@@ -35,7 +35,7 @@ server on the recorder.
 
 | Deferred to | What |
 |---|---|
-| Phase 1.5 | Local-only hotspot (`startLocalOnlyHotspot`) so the app provisions the network itself |
+| Parked | Local-only hotspot (`startLocalOnlyHotspot`) so the app provisions the network itself. Considered and dropped — see §5 |
 | Phase 2 | Native "Viewer mode" — remote clips in the real gallery and `VideoPlayerView`, with pose overlay, drawing and side-by-side comparison |
 | Phase 2 | Server-sent events so a new clip appears on the viewer the instant it is saved |
 | Phase 3 | Control channel — arm/disarm Auto, trigger a recording, change duration from the viewer |
@@ -78,8 +78,29 @@ Rationale for not doing `startLocalOnlyHotspot` now:
 - Manual hotspot is a one-time setup step that happens before the tripod is set, so it
   does not violate the "don't touch the recorder" requirement.
 
-Phase 1.5 adds the app-provisioned hotspot and puts the SSID and passphrase into the QR
-payload so the viewer joins and opens the page in one scan.
+### Why the app-provisioned hotspot stays parked
+
+This was to be Phase 1.5: `startLocalOnlyHotspot`, with the SSID and passphrase in the QR
+so the viewer joins by scanning. It is not worth what it costs.
+
+- **It cannot do "join and open in one scan".** A QR carries one payload and the scanner
+  dispatches on its scheme — `WIFI:` joins a network, `http://` opens a page — and the
+  Wi-Fi format has no field for a URL. Two codes, two scans, on every platform. What
+  remains is a saved passphrase entry, once, before the phone is mounted.
+- **Some devices kill a local-only hotspot when the app backgrounds.** That attacks the
+  core requirement: the recorder sits untouched with its screen off for a whole session. A
+  system hotspot survives it; an app-provisioned one may not, on hardware we cannot
+  enumerate in advance.
+- The OEM-specific behaviour above (Location requirements, passphrase retrieval across
+  26/28/30) is real and unchanged.
+- A local-only hotspot has **no upstream**, so an iPhone viewer shows "no internet
+  connection" and may drift back to cellular. The manual shared hotspot carries none of
+  that cost.
+
+There is no cheap half-measure: the app cannot read the current hotspot's credentials to
+build a join-QR for it, as `getWifiApConfiguration()` has been restricted since API 26.
+
+The manual hotspot stays. **Phase 2 is next.**
 
 ## 6. HTTP API
 
