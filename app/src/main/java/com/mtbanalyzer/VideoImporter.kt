@@ -45,6 +45,27 @@ class VideoImporter(private val context: Context) {
             val withExtension = if (cleaned.contains('.')) cleaned else "$cleaned.mp4"
             return PREFIX + withExtension
         }
+
+        /**
+         * The name to try on the [attempt]th go (1-based): the name itself, then
+         * `MTB_ride (2).mp4`, `MTB_ride (3).mp4`… The number goes before the extension so
+         * the file still opens as what it is.
+         */
+        fun numberedName(displayName: String, attempt: Int): String {
+            if (attempt <= 1) return displayName
+            val dot = displayName.lastIndexOf('.')
+            return if (dot > 0) {
+                displayName.substring(0, dot) + " ($attempt)" + displayName.substring(dot)
+            } else {
+                "$displayName ($attempt)"
+            }
+        }
+
+        /**
+         * Enough for re-importing the same clip a few times; past that something else is
+         * wrong and failing is the right answer.
+         */
+        private const val MAX_NAME_ATTEMPTS = 20
     }
 
     /**
@@ -69,14 +90,31 @@ class VideoImporter(private val context: Context) {
         }
     }
 
+    /**
+     * Android 11+ gives a clashing insert a unique name by itself; Android 10 refuses it
+     * outright (UNIQUE constraint on `_data`) and insert() returns null. A clash is ordinary:
+     * the same clip imported or saved from a recorder twice, or a file a previous install
+     * left behind (uninstalling does not delete it, and without the read permission this
+     * install cannot even see it). So on a refusal, try the next numbered name.
+     */
     private fun importScoped(resolver: ContentResolver, source: Uri, displayName: String, mimeType: String): Uri? {
-        val values = ContentValues().apply {
-            put(MediaStore.MediaColumns.DISPLAY_NAME, displayName)
-            put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
-            put(MediaStore.MediaColumns.RELATIVE_PATH, RELATIVE_PATH)
-            put(MediaStore.MediaColumns.IS_PENDING, 1)
+        var target: Uri? = null
+        for (attempt in 1..MAX_NAME_ATTEMPTS) {
+            val values = ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, numberedName(displayName, attempt))
+                put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
+                put(MediaStore.MediaColumns.RELATIVE_PATH, RELATIVE_PATH)
+                put(MediaStore.MediaColumns.IS_PENDING, 1)
+            }
+            target = try {
+                resolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values)
+            } catch (e: IllegalStateException) {
+                null // some builds throw on the clash instead of returning null
+            }
+            if (target != null) break
+            Log.w(TAG, "Insert refused for ${numberedName(displayName, attempt)}; trying the next name")
         }
-        val target = resolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values) ?: return null
+        if (target == null) return null
         try {
             copy(resolver, source, target)
         } catch (e: Exception) {
@@ -91,12 +129,16 @@ class VideoImporter(private val context: Context) {
     private fun importLegacy(resolver: ContentResolver, source: Uri, displayName: String, mimeType: String): Uri? {
         val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES), "MTBAnalyzer")
         if (!dir.exists() && !dir.mkdirs()) return null
-        val file = File(dir, displayName)
+        // Writing to a name that exists would overwrite someone else's clip.
+        val file = (1..MAX_NAME_ATTEMPTS).asSequence()
+            .map { File(dir, numberedName(displayName, it)) }
+            .firstOrNull { !it.exists() }
+            ?: return null
         resolver.openInputStream(source)?.use { input ->
             file.outputStream().use { output -> input.copyTo(output) }
         } ?: return null
         val values = ContentValues().apply {
-            put(MediaStore.MediaColumns.DISPLAY_NAME, displayName)
+            put(MediaStore.MediaColumns.DISPLAY_NAME, file.name)
             put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
             put(MediaStore.MediaColumns.DATA, file.absolutePath)
         }

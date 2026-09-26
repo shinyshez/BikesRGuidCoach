@@ -32,4 +32,12 @@ class VideoImporterTest {
         assertEquals(name, VideoImporter.importDisplayName("1000000038", Date(0)))
         assertEquals(name, VideoImporter.importDisplayName("1000000038.mp4", Date(0)))
     }
+
+    @Test
+    fun numberedName_leavesTheFirstAttemptAloneThenNumbersBeforeTheExtension() {
+        assertEquals("MTB_ride.mp4", VideoImporter.numberedName("MTB_ride.mp4", 1))
+        assertEquals("MTB_ride (2).mp4", VideoImporter.numberedName("MTB_ride.mp4", 2))
+        assertEquals("MTB_a.b (3).mov", VideoImporter.numberedName("MTB_a.b.mov", 3))
+        assertEquals("MTB_noext (2)", VideoImporter.numberedName("MTB_noext", 2))
+    }
 }

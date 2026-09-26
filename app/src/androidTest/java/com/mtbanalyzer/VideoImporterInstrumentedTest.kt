@@ -48,4 +48,37 @@ class VideoImporterInstrumentedTest {
         // Owned by this install, so deleting needs no consent
         assertEquals(1, appContext.contentResolver.delete(imported, null, null))
     }
+
+    /**
+     * The same clip twice (a re-import, or Save to this phone twice from a recorder) must
+     * give a second clip, not fail: Android 10 refuses a second row for the same path, and
+     * a previous install can leave that row behind where this one cannot see it.
+     */
+    @Test
+    fun import_sameNameTwice_keepsBothUnderDistinctNames() = runBlocking {
+        val appContext = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val testContext = InstrumentationRegistry.getInstrumentation().context
+        val source = File(appContext.cacheDir, "import_twice.mp4")
+        testContext.resources.openRawResource(com.mtbanalyzer.test.R.raw.test_clip).use { input ->
+            source.outputStream().use { input.copyTo(it) }
+        }
+        val importer = VideoImporter(appContext)
+
+        val first = importer.import(Uri.fromFile(source))
+        val second = importer.import(Uri.fromFile(source))
+        try {
+            assertNotNull("first import", first)
+            assertNotNull("second import of the same name", second)
+            assertTrue("two distinct rows", first != second)
+
+            val names = listOf(first!!, second!!).map { uri ->
+                appContext.contentResolver.query(uri, arrayOf(MediaStore.MediaColumns.DISPLAY_NAME), null, null, null)
+                    .use { cursor -> cursor!!.moveToFirst(); cursor.getString(0) }
+            }
+            assertEquals(2, names.toSet().size)
+            names.forEach { assertTrue(it, it.startsWith("MTB_import_twice")) }
+        } finally {
+            listOfNotNull(first, second).forEach { appContext.contentResolver.delete(it, null, null) }
+        }
+    }
 }
