@@ -73,6 +73,10 @@ dependencies {
     // QR code for the Viewer Link pairing screen (encode-only, pure Java)
     implementation("com.google.zxing:core:3.5.3")
 
+    // Viewer side of Viewer Link: scan the recorder's QR. Play services draws the scanner, so
+    // no camera permission and no second camera pipeline
+    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
+
     // Coroutines for async operations
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     

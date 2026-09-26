@@ -42,6 +42,81 @@
 
     </LinearLayout>
 
+    <!-- Source bar: "This phone | Recorder" pill (only while paired) and the connect button.
+         Hidden in compare mode, where the compare header takes the top -->
+    <FrameLayout
+        android:id="@+id/sourceBar"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingTop="12dp"
+        android:paddingBottom="6dp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <LinearLayout
+            android:id="@+id/sourceToggle"
+            android:layout_width="wrap_content"
+            android:layout_height="44dp"
+            android:layout_gravity="center"
+            android:orientation="horizontal"
+            android:padding="3dp"
+            android:background="@drawable/mode_pill_background"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/sourceLocal"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:text="This phone"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="@android:color/black"
+                android:background="@drawable/mode_segment_selected"
+                android:contentDescription="Show this phone's clips" />
+
+            <TextView
+                android:id="@+id/sourceRemote"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:maxWidth="180dp"
+                android:gravity="center"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:singleLine="true"
+                android:ellipsize="end"
+                android:text="Recorder"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="#DDDDDD"
+                android:contentDescription="Show the recorder's clips" />
+
+        </LinearLayout>
+
+        <ImageButton
+            android:id="@+id/connectButton"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_gravity="end|center_vertical"
+            android:background="@drawable/button_circle_background"
+            android:src="@drawable/ic_link"
+            app:tint="#FFFFFF"
+            android:contentDescription="Connect to recorder" />
+
+    </FrameLayout>
+
+    <androidx.constraintlayout.widget.Barrier
+        android:id="@+id/topBarrier"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        app:barrierDirection="bottom"
+        app:constraint_referenced_ids="compareHeader,sourceBar" />
+
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recycler_view"
         android:layout_width="0dp"
@@ -51,7 +126,7 @@
         android:paddingTop="4dp"
         android:paddingBottom="112dp"
         android:clipToPadding="false"
-        app:layout_constraintTop_toBottomOf="@id/compareHeader"
+        app:layout_constraintTop_toBottomOf="@id/topBarrier"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />

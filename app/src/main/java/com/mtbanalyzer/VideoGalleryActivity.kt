@@ -30,7 +30,17 @@ import androidx.lifecycle.lifecycleScope
 import com.mtbanalyzer.clips.ClipInfo
 import com.mtbanalyzer.clips.ClipRef
 import com.mtbanalyzer.clips.LocalClipSource
+import com.mtbanalyzer.viewer.RecorderAddress
+import com.mtbanalyzer.viewer.RecorderClient
+import com.mtbanalyzer.viewer.RecorderPairingUi
+import com.mtbanalyzer.viewer.RecorderSession
+import com.mtbanalyzer.viewer.RemoteClip
+import com.mtbanalyzer.viewer.RemoteThumb
+import com.mtbanalyzer.viewer.RemoteThumbLoader
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class VideoItem(
     val id: Long,
@@ -38,10 +48,13 @@ data class VideoItem(
     val displayName: String,
     val dateAdded: Long,
     val duration: Long,
-    val size: Long
+    val size: Long,
+    /** Which clip this is, for anything persisted against it (compare sync, caches). */
+    val ref: ClipRef = ClipRef.Local(id),
+    /** What Glide loads for the tile: the MediaStore Uri, or a [RemoteThumb]. */
+    val thumbnail: Any = uri
 ) {
-    /** Which clip this is, for anything persisted against it (compare sync). */
-    val ref: ClipRef get() = ClipRef.Local(id)
+    val isRemote: Boolean get() = ref is ClipRef.Remote
 
     companion object {
         fun from(clip: ClipInfo) = VideoItem(
@@ -51,6 +64,17 @@ data class VideoItem(
             dateAdded = clip.dateAdded,
             duration = clip.durationMs,
             size = clip.sizeBytes
+        )
+
+        fun from(clip: RemoteClip, address: RecorderAddress) = VideoItem(
+            id = clip.info.id,
+            uri = Uri.parse(address.clipUrl(clip.info.id)),
+            displayName = clip.info.name,
+            dateAdded = clip.info.dateAdded,
+            duration = clip.info.durationMs,
+            size = clip.info.sizeBytes,
+            ref = clip.ref,
+            thumbnail = RemoteThumb(address, clip.recorderId, clip.info.id)
         )
     }
 }
@@ -76,6 +100,18 @@ class VideoGalleryActivity : AppCompatActivity() {
     private lateinit var importer: VideoImporter
     private lateinit var clipSource: LocalClipSource
     private var readPermissionDenied = false
+
+    // Viewer Link, viewer side: the paired recorder's clips as a second source
+    private lateinit var sourceBar: View
+    private lateinit var sourceToggle: View
+    private lateinit var sourceLocal: TextView
+    private lateinit var sourceRemote: TextView
+    private lateinit var pairingUi: RecorderPairingUi
+    private val recorderClient = RecorderClient()
+    private var showingRemote = false
+    private var remoteError: String? = null
+    private var remoteLoading = false
+    private var remoteLoad: Job? = null
 
     // Media read permission: without it MediaStore hides videos from a previous install
     private val requestReadPermission = registerForActivityResult(
@@ -109,6 +145,8 @@ class VideoGalleryActivity : AppCompatActivity() {
         
         importer = VideoImporter(this)
         clipSource = LocalClipSource(this)
+        pairingUi = RecorderPairingUi(this) { onPairingChanged() }
+        RemoteThumbLoader.register(this)
         setupUI()
         ensureReadPermissionThenLoad()
         handleShareIntent(intent)
@@ -213,26 +251,41 @@ class VideoGalleryActivity : AppCompatActivity() {
         compareHeader = findViewById(R.id.compareHeader)
         bottomControls = findViewById(R.id.bottomControls)
         cancelCompareButton = findViewById(R.id.cancelCompareButton)
+        sourceBar = findViewById(R.id.sourceBar)
+        sourceToggle = findViewById(R.id.sourceToggle)
+        sourceLocal = findViewById(R.id.sourceLocal)
+        sourceRemote = findViewById(R.id.sourceRemote)
+        findViewById<View>(R.id.connectButton).setOnClickListener { pairingUi.showMenu() }
+        sourceLocal.setOnClickListener { showSource(remote = false) }
+        sourceRemote.setOnClickListener { showSource(remote = true) }
         importButton.setOnClickListener {
             pickVideos.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly))
         }
         // The empty state doubles as the permission prompt when access was denied
         emptyView.setOnClickListener {
-            if (readPermissionDenied) requestReadPermission.launch(MediaPermissions.readVideoPermission())
+            when {
+                showingRemote -> loadVideos() // retry
+                readPermissionDenied -> requestReadPermission.launch(MediaPermissions.readVideoPermission())
+            }
         }
 
         adapter = GalleryAdapter(selectedVideos,
             onVideoClick = { videoItem ->
-                if (isCompareMode) {
-                    handleVideoSelection(videoItem, !selectedVideos.contains(videoItem))
-                } else {
-                    playVideo(videoItem.uri)
+                when {
+                    isCompareMode -> handleVideoSelection(videoItem, !selectedVideos.contains(videoItem))
+                    videoItem.isRemote -> playRemote(videoItem)
+                    else -> playVideo(videoItem.uri)
                 }
             },
             onVideoLongClick = { videoItem ->
-                // Long-press starts compare mode with this clip as pick 1
-                enterCompareMode()
-                handleVideoSelection(videoItem, true)
+                if (videoItem.isRemote) {
+                    // Compare across sources is M3; until then a long-press keeps a copy
+                    offerSaveToPhone(videoItem)
+                } else {
+                    // Long-press starts compare mode with this clip as pick 1
+                    enterCompareMode()
+                    handleVideoSelection(videoItem, true)
+                }
             }
         )
 
@@ -253,6 +306,12 @@ class VideoGalleryActivity : AppCompatActivity() {
     }
 
     private fun loadVideos() {
+        applySourceUi()
+        if (showingRemote) {
+            loadRemoteVideos()
+            return
+        }
+        remoteLoad?.cancel()
         try {
             val clips = clipSource.list()
             videos.clear()
@@ -274,7 +333,12 @@ class VideoGalleryActivity : AppCompatActivity() {
         if (videos.isEmpty()) {
             recyclerView.visibility = View.GONE
             emptyView.visibility = View.VISIBLE
-            emptyView.text = if (readPermissionDenied) {
+            emptyView.text = if (showingRemote && remoteLoading) {
+                "Loading clips from ${RecorderSession.recorder?.device ?: "the recorder"}…"
+            } else if (showingRemote) {
+                remoteError?.let { "$it\n\nTap to try again." }
+                    ?: "No clips on ${RecorderSession.recorder?.device ?: "the recorder"} yet.\n\nTap to refresh."
+            } else if (readPermissionDenied) {
                 "MTB Analyzer can't see your videos without permission.\n\nTap here to allow access."
             } else {
                 "No videos yet\n\nStart riding to capture some footage,\nor import a clip from your phone."
@@ -323,6 +387,7 @@ class VideoGalleryActivity : AppCompatActivity() {
         isCompareMode = true
         selectedVideos.clear()
         compareHeader.visibility = View.VISIBLE
+        sourceBar.visibility = View.GONE
         importButton.visibility = View.GONE
         bottomControls.gravity = android.view.Gravity.CENTER
         adapter.updateCompareMode(true)
@@ -333,7 +398,8 @@ class VideoGalleryActivity : AppCompatActivity() {
         isCompareMode = false
         selectedVideos.clear()
         compareHeader.visibility = View.GONE
-        importButton.visibility = View.VISIBLE
+        sourceBar.visibility = View.VISIBLE
+        importButton.visibility = if (showingRemote) View.GONE else View.VISIBLE
         bottomControls.gravity = android.view.Gravity.CENTER_VERTICAL or android.view.Gravity.END
         adapter.updateCompareMode(false)
         updateComparePill()
@@ -391,6 +457,99 @@ class VideoGalleryActivity : AppCompatActivity() {
         }
     }
 
+    // --- Viewer Link: the paired recorder as a second source ---------------------------
+
+    private fun onPairingChanged() {
+        showingRemote = RecorderSession.recorder != null
+        loadVideos()
+    }
+
+    private fun showSource(remote: Boolean) {
+        if (remote && RecorderSession.recorder == null) return
+        // Tapping the selected segment again refreshes it: there is no live update until M4
+        showingRemote = remote
+        loadVideos()
+    }
+
+    /** The pill appears only while paired; remote clips get no Import and no Compare (M3). */
+    private fun applySourceUi() {
+        val recorder = RecorderSession.recorder
+        if (recorder == null) showingRemote = false
+        sourceToggle.visibility = if (recorder != null) View.VISIBLE else View.GONE
+        sourceRemote.text = recorder?.device ?: "Recorder"
+        styleSegment(sourceLocal, selected = !showingRemote)
+        styleSegment(sourceRemote, selected = showingRemote)
+        if (!isCompareMode) {
+            importButton.visibility = if (showingRemote) View.GONE else View.VISIBLE
+            compareButton.visibility = if (showingRemote) View.GONE else View.VISIBLE
+        }
+    }
+
+    private fun styleSegment(segment: TextView, selected: Boolean) {
+        segment.setBackgroundResource(if (selected) R.drawable.mode_segment_selected else 0)
+        segment.setTextColor(if (selected) 0xFF000000.toInt() else 0xFFDDDDDD.toInt())
+        segment.isSelected = selected
+    }
+
+    private fun loadRemoteVideos() {
+        val recorder = RecorderSession.recorder ?: return
+        remoteLoad?.cancel()
+        // Never leave this phone's tiles (swipe-deletable) on screen under the Recorder label
+        if (videos.any { !it.isRemote }) videos.clear()
+        remoteLoading = true
+        remoteError = null
+        updateUI()
+        remoteLoad = lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) { runCatching { recorderClient.clips(recorder) } }
+            if (!showingRemote) return@launch
+            remoteLoading = false
+            videos.clear()
+            result.onSuccess { clips ->
+                remoteError = null
+                clips.mapTo(videos) { VideoItem.from(it, recorder.address) }
+            }.onFailure { e ->
+                Log.w(TAG, "Could not list the recorder's clips", e)
+                remoteError = pairingUi.failureMessage(e)
+            }
+            updateUI()
+        }
+    }
+
+    /** Download, then play (M1): the player sees a local file, so pose and drawing just work. */
+    private fun playRemote(video: VideoItem) {
+        val recorder = RecorderSession.recorder ?: return
+        pairingUi.fetchClip(recorder, video.id, "Loading ${prettyName(video)}") { file ->
+            startActivity(Intent(this, VideoPlaybackActivity::class.java).apply {
+                putExtra(VideoPlaybackActivity.EXTRA_VIDEO_URI, Uri.fromFile(file).toString())
+                putExtra(VideoPlaybackActivity.EXTRA_VIDEO_NAME, video.displayName)
+            })
+        }
+    }
+
+    /** A copy into this phone's own gallery. Nothing is written to the recorder. */
+    private fun offerSaveToPhone(video: VideoItem) {
+        val recorder = RecorderSession.recorder ?: return
+        AlertDialog.Builder(this, androidx.appcompat.R.style.Theme_AppCompat_Dialog_Alert)
+            .setTitle("Save to this phone?")
+            .setMessage("${prettyName(video)} will be copied into this phone's gallery, to keep or compare later. Nothing changes on ${recorder.device}.")
+            .setPositiveButton("Save") { _, _ ->
+                pairingUi.fetchClip(recorder, video.id, "Saving ${prettyName(video)}") { file ->
+                    lifecycleScope.launch {
+                        val saved = importer.import(Uri.fromFile(file), originalName = video.displayName)
+                        Toast.makeText(
+                            this@VideoGalleryActivity,
+                            if (saved != null) "Saved to this phone" else "Could not save the clip",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun prettyName(video: VideoItem) = video.displayName.removePrefix("MTB_").removeSuffix(".mp4")
+
     override fun onResume() {
         super.onResume()
         // Refresh the list in case videos were deleted/added
@@ -424,6 +583,8 @@ class VideoGalleryActivity : AppCompatActivity() {
                 viewHolder: RecyclerView.ViewHolder
             ): Int {
                 if (viewHolder is GalleryAdapter.HeaderHolder) return 0
+                // The link is read-only: a recorder's clips are deleted on the recorder
+                if (adapter.clipAt(viewHolder.adapterPosition)?.isRemote == true) return 0
                 // Only enable swipe when not in compare mode
                 return if (!isCompareMode) {
                     makeMovementFlags(0, ItemTouchHelper.LEFT or ItemTouchHelper.RIGHT)

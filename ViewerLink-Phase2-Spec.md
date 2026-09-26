@@ -3,7 +3,7 @@
 Make the viewing phone the real app: remote clips in the actual gallery and
 `VideoPlayerView`, with the pose overlay, drawing and side-by-side comparison.
 
-**Status**: draft. Built so far: the cleartext spike (§4) and M0 (§9: `ClipRef`, `LocalClipSource`).
+**Status**: draft. Built so far: the cleartext spike (§4), M0 and M1 (§9). Q1 and Q2 are decided (§12).
 **Builds on**: `ViewerLink-Phase1-Spec.md` (API contract, security model).
 **Roadmap**: `ViewerLink-Roadmap.html`.
 
@@ -121,8 +121,13 @@ to the gallery in this phase, so it lands on its own, first, with tests (§9, M0
 *As built in M0:* the callers differ in one flag. The server lists with `finishedOnly = true`
 (no `IS_PENDING` rows, and pre-Q no zero-duration rows, as `ClipCatalog` did); the gallery
 and capture strip list every row, as they always have. The pre-Q duration test would
-otherwise hide imports on API 24–28, which are inserted with no `DURATION`. The `ClipSource`
-interface arrives with its second implementation in M1.
+otherwise hide imports on API 24–28, which are inserted with no `DURATION`.
+
+*As built in M1:* no `ClipSource` interface after all. The gallery maps each source into its
+own `VideoItem`s (a remote one carries a `ClipRef.Remote` and a `RemoteThumb` Glide model), and
+the two sources share nothing else worth abstracting. The remote side is
+`viewer.RecorderClient` (pair, health, clips) over `ViewerHttpClient`, with its own small
+`JsonReader` because org.json is stubbed on the JVM.
 
 **Id collisions are real.** `VideoComparisonActivity.kt:134` keys `CompareSyncStore` on
 `uri.lastPathSegment`. For `http://…/api/clips/1337` that is `"1337"`, the same key as
@@ -200,8 +205,8 @@ Each milestone is a PR that leaves main shippable.
 
 | | What | Done when |
 |---|---|---|
-| M0 | `ClipRef`, `LocalClipSource` shared by gallery and server; compare keys move to `ClipRef.key` | Gallery and Viewer Link behave as before; existing tests pass; new tests cover the key migration |
-| M1 | Pairing (§5), remote gallery tab, download-then-play | A remote clip opens in `VideoPlayerView` with pose and draw working (it plays from the cached file, so `VideoPlayerView` is untouched) |
+| M0 ✓ | `ClipRef`, `LocalClipSource` shared by gallery and server; compare keys move to `ClipRef.key` | Gallery and Viewer Link behave as before; existing tests pass; new tests cover the key migration |
+| M1 ✓ | Pairing (§5), remote gallery tab, download-then-play | A remote clip opens in `VideoPlayerView` with pose and draw working (it plays from the cached file, so `VideoPlayerView` is untouched) |
 | M2 | Stream while downloading (§7): `PlayableClip`, `RemoteClipDataSource` in `VideoPlayerView` | Playback starts before the download finishes; pose becomes available when it does |
 | M3 | Compare across sources | A local and a remote clip compare side by side, with lock/offset remembered |
 | M4 | SSE (§8) for app and page | A clip saved on the recorder appears on both viewers within a second |
@@ -230,13 +235,16 @@ M1 is deliberately "download, then play". It ships the whole feature with no cha
 | Glide pulls in the platform HTTP stack for thumbnails | Custom `ModelLoader` over `ViewerHttpClient`; covered by the same non-loopback test |
 | An SSE stream holds a worker forever | Keep-alive write fails when the viewer goes away; caps documented; viewer reconnects with backoff |
 
-## 12. Open questions
+## 12. Questions (decided)
 
 - **Q1. Keep the token across Viewer Link restarts?** Re-scanning every session is fine
   for a coach who pairs once at the trailhead. A stable token until "Reset pairing"
   would be friendlier, but it weakens Phase 1's "a new token every start". Recommend:
-  leave as is for Phase 2, and revisit with Phase 3's security review.
+  leave as is for Phase 2, and revisit with Phase 3's security review. **Decided: as
+  recommended.** Pairing lives in memory (`RecorderSession`); a restart on the recorder
+  means scanning again, and the viewer says so.
 - **Q2. Should the viewer be able to keep a remote clip?** A download into its own
   gallery is one button once the cache exists. It is a copy on the viewer, not a write
   to the recorder, so it stays inside "read-only". Recommend: yes, in M1 or M3, as
-  "Save to this phone".
+  "Save to this phone". **Decided: yes, in M1.** Long-press a recorder clip; it lands in
+  this phone's gallery through `VideoImporter` under the recorder's name.

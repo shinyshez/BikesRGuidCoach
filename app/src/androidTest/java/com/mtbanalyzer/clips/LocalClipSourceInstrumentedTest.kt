@@ -58,7 +58,7 @@ class LocalClipSourceInstrumentedTest {
         assertTrue(clip.name, clip.name.startsWith("MTB_"))
         assertEquals(ClipNaming.KIND_IMPORT, clip.kind)
         assertTrue(clip.isImport)
-        assertEquals(ClipRef.Local(clipId), clip.ref)
+        assertEquals(ClipRef.Local(clipId), clip.localRef)
         assertEquals(clip, finished.single { it.id == clipId })
         assertEquals(clipUri, LocalClipSource.uriFor(clipId))
     }

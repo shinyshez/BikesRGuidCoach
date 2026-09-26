@@ -47,10 +47,14 @@ class VideoImporter(private val context: Context) {
         }
     }
 
-    /** Copies [source] into Movies/MTBAnalyzer; returns the new MediaStore URI, or null on failure. */
-    suspend fun import(source: Uri): Uri? = withContext(Dispatchers.IO) {
+    /**
+     * Copies [source] into Movies/MTBAnalyzer; returns the new MediaStore URI, or null on failure.
+     * [originalName] overrides the name read from [source], for a copy whose file name means
+     * nothing (a recorder clip cached as `<id>.mp4`).
+     */
+    suspend fun import(source: Uri, originalName: String? = null): Uri? = withContext(Dispatchers.IO) {
         val resolver = context.contentResolver
-        val displayName = importDisplayName(queryDisplayName(resolver, source))
+        val displayName = importDisplayName(originalName ?: queryDisplayName(resolver, source))
         val mimeType = resolver.getType(source)?.takeIf { it.startsWith("video/") } ?: "video/mp4"
         Log.d(TAG, "Importing $source as $displayName ($mimeType)")
         try {

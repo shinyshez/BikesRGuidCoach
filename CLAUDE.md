@@ -237,6 +237,13 @@ a small read-only HTTP server and the viewer drives it.
   and polls every 5s, so a run recorded after it is open appears on its own
 - A foreground service keeps the socket alive once the recorder's screen goes off; the
   notification carries a Stop action. Off by default, and the server is never started on launch
+- **Viewer app** (Phase 2, M1): the link button top-right of the gallery pairs with a recorder
+  (Play services code scanner, or type the URL). While paired a `This phone | <device>` pill
+  switches source. Tapping a recorder clip downloads it (`RemoteClipCache`, `cacheDir/
+  remote-clips/<recorderId>/<id>.mp4`, 256MB LRU) and opens the local file in the normal
+  player, so pose and drawing work unchanged. Long-press offers **Save to this phone**.
+  Recorder clips never swipe-delete and have no Import or Compare (compare across sources is
+  M3). Pairing is in memory only; a Viewer Link restart on the recorder means scanning again
 
 Implementation lives in `com.mtbanalyzer.viewer`. `ViewerLinkServer` is a hand-rolled
 HTTP/1.1 server (five read-only endpoints), `ViewerLinkRoutes` holds the API. The clip list
@@ -244,7 +251,8 @@ comes from `clips.LocalClipSource`, the one MediaStore query shared with the gal
 capture strip; the server passes `finishedOnly = true` so it never serves a recording still
 being written, while the gallery lists every row as it always has. Anything persisted against
 a clip (compare sync) is keyed on `ClipRef.key`, never a Uri: a remote clip's URL ends in the
-same id as an unrelated local clip.
+same id as an unrelated local clip. `/api/health` carries `recorderId` (`RecorderIdentity`, a
+random UUID kept on the recorder) so the viewer's cache survives the per-session token.
 
 Two details worth knowing before changing any of it:
 

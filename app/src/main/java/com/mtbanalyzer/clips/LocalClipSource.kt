@@ -18,7 +18,8 @@ data class ClipInfo(
     val sizeBytes: Long,
     val kind: String
 ) {
-    val ref: ClipRef.Local get() = ClipRef.Local(id)
+    /** The ref for this clip on the phone that listed it; a recorder's clips wrap it in RemoteClip. */
+    val localRef: ClipRef.Local get() = ClipRef.Local(id)
     val isImport: Boolean get() = kind == ClipNaming.KIND_IMPORT
 }
 

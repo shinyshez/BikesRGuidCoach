@@ -101,7 +101,10 @@ class ViewerLinkServerInstrumentedTest {
     fun health_isServedWithoutAToken() {
         val connection = connect("/api/health")
         assertEquals(200, connection.responseCode)
-        assertTrue(connection.inputStream.readBytes().toString(Charsets.UTF_8).contains("\"ok\":true"))
+        val body = connection.inputStream.readBytes().toString(Charsets.UTF_8)
+        assertTrue(body, body.contains("\"ok\":true"))
+        // The viewer app keys its cache on this, so it must survive a new token.
+        assertTrue(body, body.contains("\"recorderId\":\"${RecorderIdentity.id(context)}\""))
     }
 
     @Test
