@@ -58,25 +58,12 @@ jobs:
       - name: Build Debug APK
         run: ./gradlew assembleDebug
 
-      # The cached snapshot must come from this clean boot, never from the end of a
-      # capture run: a snapshot taken after tests/captures has had the app uninstalled
-      # and services torn down, and boots with system services missing next time.
-      - name: Create AVD and generate snapshot
-        if: steps.avd-cache.outputs.cache-hit != 'true'
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 29
-          arch: x86_64
-          force-avd-creation: false
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
-          disable-animations: false
-          # Put the emulator down ourselves: the runner's teardown hangs on "removeAll" after
-          # the snapshot save, exactly as it did after the test run (see ci-stop-emulator.sh).
-          # This step only runs on an AVD cache miss, i.e. whenever a Gradle file changes.
-          script: |
-            echo "Generated AVD snapshot for caching."
-            bash scripts/ci-stop-emulator.sh
-
+      # No separate "Create AVD and generate snapshot" step. The step below boots with
+      # -no-snapshot-load -no-snapshot-save, so a saved snapshot was never used, and the step
+      # that made one only ran on an AVD cache miss -- where it either hung in the runner's
+      # teardown or, restored from a partial-key match, booted a stale snapshot into a
+      # DeadSystemException. On a miss the emulator action creates the AVD itself
+      # (force-avd-creation: false), and the post step caches it as before.
       - name: Run Emulator and Capture Screenshots
         uses: reactivecircus/android-emulator-runner@v2
         with:
