@@ -13,14 +13,29 @@
 # after the wait rather than in it. Leaving its teardown nothing to wait on is the next
 # lever: make sure the process is genuinely gone first.
 #
+# Killing qemu is not always enough. After the AVD snapshot step the emulator exited
+# cleanly and the runner still hung until the job was cancelled; its orphan cleanup then
+# named what was left: crashpad_handler and adb. Both are children the emulator spawned
+# (it starts the adb server itself when none is running, which it isn't in that step),
+# and both inherit its stdout/stderr, which the runner waits on to close before the step
+# can finish. So once qemu is gone, those go too.
+#
 # Always exits 0 — the caller has already captured the test exit code.
 set -uo pipefail
+
+release_output_pipes() {
+  adb kill-server >/dev/null 2>&1 || true
+  pkill -f 'crashpad_handler' 2>/dev/null || true
+  sleep 1
+  pkill -9 -f 'crashpad_handler' 2>/dev/null || true
+}
 
 adb emu kill >/dev/null 2>&1 || true
 
 for _ in $(seq 1 15); do
   if ! pgrep -f 'qemu-system' >/dev/null 2>&1; then
     echo "Emulator exited cleanly."
+    release_output_pipes
     exit 0
   fi
   sleep 1
@@ -32,4 +47,5 @@ sleep 2
 if pgrep -f 'qemu-system' >/dev/null 2>&1; then
   echo "Warning: a qemu-system process survived SIGKILL." >&2
 fi
+release_output_pipes
 exit 0
