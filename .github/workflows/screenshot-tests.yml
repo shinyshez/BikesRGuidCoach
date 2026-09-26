@@ -70,7 +70,12 @@ jobs:
           force-avd-creation: false
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           disable-animations: false
-          script: echo "Generated AVD snapshot for caching."
+          # Put the emulator down ourselves: the runner's teardown hangs on "removeAll" after
+          # the snapshot save, exactly as it did after the test run (see ci-stop-emulator.sh).
+          # This step only runs on an AVD cache miss, i.e. whenever a Gradle file changes.
+          script: |
+            echo "Generated AVD snapshot for caching."
+            bash scripts/ci-stop-emulator.sh
 
       - name: Run Emulator and Capture Screenshots
         uses: reactivecircus/android-emulator-runner@v2
