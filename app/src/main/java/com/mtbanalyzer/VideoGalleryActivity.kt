@@ -1,10 +1,7 @@
 package com.mtbanalyzer
 
-import android.content.ClipData
-import android.content.ContentUris
 import android.content.Intent
 import android.content.res.Configuration
-import android.database.Cursor
 import android.graphics.Canvas
 import android.graphics.Color
 import android.net.Uri
@@ -30,6 +27,9 @@ import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.lifecycleScope
+import com.mtbanalyzer.clips.ClipInfo
+import com.mtbanalyzer.clips.ClipRef
+import com.mtbanalyzer.clips.LocalClipSource
 import kotlinx.coroutines.launch
 
 data class VideoItem(
@@ -39,7 +39,21 @@ data class VideoItem(
     val dateAdded: Long,
     val duration: Long,
     val size: Long
-)
+) {
+    /** Which clip this is, for anything persisted against it (compare sync). */
+    val ref: ClipRef get() = ClipRef.Local(id)
+
+    companion object {
+        fun from(clip: ClipInfo) = VideoItem(
+            id = clip.id,
+            uri = LocalClipSource.uriFor(clip.id),
+            displayName = clip.name,
+            dateAdded = clip.dateAdded,
+            duration = clip.durationMs,
+            size = clip.sizeBytes
+        )
+    }
+}
 
 class VideoGalleryActivity : AppCompatActivity() {
     
@@ -60,6 +74,7 @@ class VideoGalleryActivity : AppCompatActivity() {
     private lateinit var itemTouchHelper: ItemTouchHelper
     private lateinit var importButton: android.widget.ImageButton
     private lateinit var importer: VideoImporter
+    private lateinit var clipSource: LocalClipSource
     private var readPermissionDenied = false
 
     // Media read permission: without it MediaStore hides videos from a previous install
@@ -93,6 +108,7 @@ class VideoGalleryActivity : AppCompatActivity() {
         supportActionBar?.title = "Video Gallery"
         
         importer = VideoImporter(this)
+        clipSource = LocalClipSource(this)
         setupUI()
         ensureReadPermissionThenLoad()
         handleShareIntent(intent)
@@ -237,55 +253,14 @@ class VideoGalleryActivity : AppCompatActivity() {
     }
 
     private fun loadVideos() {
-        val projection = arrayOf(
-            MediaStore.Video.Media._ID,
-            MediaStore.Video.Media.DISPLAY_NAME,
-            MediaStore.Video.Media.DATE_ADDED,
-            MediaStore.Video.Media.DURATION,
-            MediaStore.Video.Media.SIZE
-        )
-        
-        val selection = "${MediaStore.Video.Media.DISPLAY_NAME} LIKE ?"
-        val selectionArgs = arrayOf("MTB_%")
-        val sortOrder = "${MediaStore.Video.Media.DATE_ADDED} DESC"
-        
         try {
-            val cursor: Cursor? = contentResolver.query(
-                MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
-                projection,
-                selection,
-                selectionArgs,
-                sortOrder
-            )
-            
-            cursor?.use {
-                val idColumn = it.getColumnIndexOrThrow(MediaStore.Video.Media._ID)
-                val nameColumn = it.getColumnIndexOrThrow(MediaStore.Video.Media.DISPLAY_NAME)
-                val dateColumn = it.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_ADDED)
-                val durationColumn = it.getColumnIndexOrThrow(MediaStore.Video.Media.DURATION)
-                val sizeColumn = it.getColumnIndexOrThrow(MediaStore.Video.Media.SIZE)
-                
-                videos.clear()
-                
-                while (it.moveToNext()) {
-                    val id = it.getLong(idColumn)
-                    val name = it.getString(nameColumn)
-                    val dateAdded = it.getLong(dateColumn)
-                    val duration = it.getLong(durationColumn)
-                    val size = it.getLong(sizeColumn)
-                    
-                    val contentUri = ContentUris.withAppendedId(
-                        MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
-                        id
-                    )
-                    
-                    videos.add(VideoItem(id, contentUri, name, dateAdded, duration, size))
-                }
-            }
-            
+            val clips = clipSource.list()
+            videos.clear()
+            clips.mapTo(videos) { VideoItem.from(it) }
+
             updateUI()
             Log.d(TAG, "Loaded ${videos.size} MTB videos")
-            
+
         } catch (e: SecurityException) {
             Log.e(TAG, "No permission to access videos", e)
             Toast.makeText(this, "Permission needed to access videos", Toast.LENGTH_LONG).show()
@@ -404,8 +379,10 @@ class VideoGalleryActivity : AppCompatActivity() {
             val intent = Intent(this, VideoComparisonActivity::class.java).apply {
                 putExtra(VideoComparisonActivity.EXTRA_VIDEO1_URI, selectedVideos[0].uri.toString())
                 putExtra(VideoComparisonActivity.EXTRA_VIDEO1_NAME, selectedVideos[0].displayName)
+                putExtra(VideoComparisonActivity.EXTRA_VIDEO1_KEY, selectedVideos[0].ref.key)
                 putExtra(VideoComparisonActivity.EXTRA_VIDEO2_URI, selectedVideos[1].uri.toString())
                 putExtra(VideoComparisonActivity.EXTRA_VIDEO2_NAME, selectedVideos[1].displayName)
+                putExtra(VideoComparisonActivity.EXTRA_VIDEO2_KEY, selectedVideos[1].ref.key)
             }
             startActivity(intent)
             

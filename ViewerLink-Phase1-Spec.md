@@ -255,9 +255,10 @@ for *outbound* requests made by this app's HTTP stacks. The server is a raw `Ser
 accepting inbound connections, and the viewer is a separate browser app, so Phase 1 needs no
 exemption in the shipped app. The instrumented test does drive the server through
 `HttpURLConnection`, so a **debug-only** network security config permits cleartext to
-loopback (`app/src/debug/`). **Phase 2 will need more**: a native viewer mode points media3
-at an `http://` URL, which is an outbound cleartext request and will be refused — it needs a
-production config scoped to private address ranges before that can work.
+loopback (`app/src/debug/`). **Phase 2** needed outbound cleartext to the recorder. A config
+"scoped to private address ranges" turned out not to be expressible (no CIDR in
+`<domain-config>`), so the viewer uses a raw-socket client instead. See
+`ViewerLink-Phase2-Spec.md` §4.
 
 **Media read permission**: the server reads MediaStore on behalf of a remote caller, so it
 needs the same permission the gallery does. Reuse `MediaPermissions` — request it from the
@@ -311,7 +312,7 @@ artifact and no camera dependency. Render the `BitMatrix` to a `Bitmap` directly
 
 `VideoGalleryActivity` is deliberately **not** touched in Phase 1 — `ClipCatalog`
 duplicates its query rather than refactoring it, so the feature cannot regress the gallery.
-Phase 2 collapses the two.
+Phase 2 collapses the two (done in Phase 2 M0: `clips/LocalClipSource.kt`).
 
 ## 11. Testing
 
@@ -354,7 +355,7 @@ so it genuinely runs in CI:
 | Battery: detection + encode + hotspot + serving | Foreground service is visible and stoppable; off by default; measure before shipping |
 | Hand-rolled HTTP grows into a liability | Bounded by a read-only API of five endpoints. If Phase 3 adds writes, revisit and consider Ktor CIO |
 | Serving a clip still being written | `IS_PENDING` filter, called out in §6 |
-| Phase 2's media3 playback refused by the cleartext policy | Known now (§9), not a surprise later; needs a production network security config scoped to private ranges |
+| Phase 2's media3 playback refused by the cleartext policy | Known now (§9), not a surprise later; resolved by a raw-socket client, see `ViewerLink-Phase2-Spec.md` §4 |
 
 ## 13. Acceptance criteria
 
