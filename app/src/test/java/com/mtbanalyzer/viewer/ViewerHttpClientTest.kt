@@ -11,7 +11,9 @@ import org.junit.Test
 import java.io.BufferedInputStream
 import java.io.IOException
 import java.net.InetAddress
+import java.net.InetSocketAddress
 import java.net.ServerSocket
+import java.net.Socket
 import java.util.Collections
 import kotlin.concurrent.thread
 
@@ -167,9 +169,14 @@ class ViewerHttpClientTest {
 
     @Test
     fun `nothing listening is an IOException`() {
-        val port = server.localPort
-        server.close()
-        expectIOException { client.get("http://127.0.0.1:$port/") }
+        // Hold a port bound but not listening: a connect to it is refused, and nothing else
+        // can take it meanwhile. Closing a server and reusing its port was racy -- a freed
+        // ephemeral port can be handed straight to someone else, and once in CI something
+        // answered on it.
+        Socket().use { holder ->
+            holder.bind(InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0))
+            expectIOException { client.get("http://127.0.0.1:${holder.localPort}/") }
+        }
     }
 
     @Test
