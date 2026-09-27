@@ -15,6 +15,8 @@ import com.bumptech.glide.load.engine.DiskCacheStrategy
 import com.mtbanalyzer.R
 import com.mtbanalyzer.VideoImporter
 import com.mtbanalyzer.VideoPlaybackActivity
+import com.mtbanalyzer.VideoPlayerView
+import com.mtbanalyzer.clips.ClipRef
 import com.mtbanalyzer.clips.LocalClipSource
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -120,6 +122,57 @@ class RemoteViewerInstrumentedTest {
             .submit()
             .get(20, TimeUnit.SECONDS)
         assertTrue(bitmap.width > 0 && bitmap.height > 0)
+    }
+
+    /**
+     * M2 end to end: the playback screen opened on a recorder clip that is not cached plays
+     * it over http:// at once, downloads it alongside, and a Pose tap made before the file
+     * lands turns pose on by itself when it does.
+     */
+    @Test
+    fun remoteClip_streamsAtOnceAndPoseFollowsTheDownload() {
+        val recorder = pair()
+        RecorderSession.pair(recorder)
+        val cache = RecorderSession.cache(context)
+        cache.forget(recorder.id)
+        try {
+            val intent = Intent(context, VideoPlaybackActivity::class.java)
+                .putExtra(VideoPlaybackActivity.EXTRA_REMOTE_CLIP_KEY, ClipRef.Remote(recorder.id, clipId).key)
+                .putExtra(VideoPlaybackActivity.EXTRA_VIDEO_NAME, "MTB_streamed.mp4")
+            ActivityScenario.launch<VideoPlaybackActivity>(intent).use { scenario ->
+                var tappedWhilePending = false
+                scenario.onActivity { activity ->
+                    val player = activity.findViewById<VideoPlayerView>(R.id.videoPlayerView)
+                    assertEquals("playback streams from the recorder", "http", player.playbackUri?.scheme)
+                    if (!player.hasFrames()) {
+                        activity.findViewById<android.view.View>(R.id.poseToggleButton).performClick()
+                        tappedWhilePending = true
+                    }
+                }
+
+                var landed = false
+                repeat(40) {
+                    if (!landed) {
+                        scenario.onActivity { activity ->
+                            landed = activity.findViewById<VideoPlayerView>(R.id.videoPlayerView).hasFrames()
+                        }
+                        if (!landed) Thread.sleep(500)
+                    }
+                }
+                assertTrue("the download never handed the player its frames", landed)
+                assertEquals(Lifecycle.State.RESUMED, scenario.state)
+                scenario.onActivity { activity ->
+                    val player = activity.findViewById<VideoPlayerView>(R.id.videoPlayerView)
+                    assertEquals("still streaming; the file only feeds pose", "http", player.playbackUri?.scheme)
+                    if (tappedWhilePending) {
+                        assertTrue("a Pose tap while pending turns pose on", player.isPoseDetectionEnabled())
+                    }
+                }
+            }
+            assertArrayEquals(localBytes(), cache.cached(recorder.id, clipId)!!.readBytes())
+        } finally {
+            RecorderSession.forget(context)
+        }
     }
 
     @Test

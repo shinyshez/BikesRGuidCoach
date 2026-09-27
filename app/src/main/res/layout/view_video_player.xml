@@ -119,15 +119,34 @@
             android:textSize="13sp"
             android:visibility="gone" />
 
-        <ImageButton
-            android:id="@+id/poseToggleButton"
+        <!-- Pose toggle, with a spinner over it while a recorder clip's frames download -->
+        <FrameLayout
+            android:id="@+id/poseToggleContainer"
             android:layout_width="44dp"
             android:layout_height="44dp"
-            android:layout_marginEnd="8dp"
-            android:src="@drawable/ic_pose"
-            app:tint="@color/toggle_icon_tint"
-            android:background="@drawable/button_circle_toggle_background"
-            android:contentDescription="Toggle pose overlay" />
+            android:layout_marginEnd="8dp">
+
+            <ImageButton
+                android:id="@+id/poseToggleButton"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:src="@drawable/ic_pose"
+                app:tint="@color/toggle_icon_tint"
+                android:background="@drawable/button_circle_toggle_background"
+                android:contentDescription="Toggle pose overlay" />
+
+            <ProgressBar
+                android:id="@+id/posePendingSpinner"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:padding="4dp"
+                android:indeterminateTint="#FFFFFF"
+                android:clickable="false"
+                android:focusable="false"
+                android:importantForAccessibility="no"
+                android:visibility="gone" />
+
+        </FrameLayout>
 
         <ImageButton
             android:id="@+id/drawingToggleButton"

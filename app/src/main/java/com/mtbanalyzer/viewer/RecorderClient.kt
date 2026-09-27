@@ -66,6 +66,20 @@ data class RemoteClip(val recorderId: String, val info: ClipInfo) {
     val ref: ClipRef.Remote get() = ClipRef.Remote(recorderId, info.id)
 }
 
+/** What `/api/clips/{id}/meta` says: enough for the frame badge before the file lands. */
+data class ClipMeta(val durationMs: Long, val frameRate: Double, val frameCount: Long) {
+    /**
+     * The recorder reads CAPTURE_FRAMERATE, which ordinary recordings rarely carry, so the
+     * rate is often 0 while the count is known. Derive it the way the local player does.
+     */
+    val effectiveFrameRate: Double
+        get() = when {
+            frameRate > 0.0 -> frameRate
+            frameCount > 0 && durationMs > 0 -> frameCount * 1000.0 / durationMs
+            else -> 0.0
+        }
+}
+
 /** A recorder the viewer has paired with, for as long as this process lives. */
 data class Recorder(val address: RecorderAddress, val health: RecorderHealth) {
     val id: String get() = health.recorderId ?: throw IllegalStateException("Unpaired recorder")
@@ -121,6 +135,11 @@ class RecorderClient(private val http: ViewerHttpClient = ViewerHttpClient()) {
         return parseClips(recorder.id, getJson(recorder.address.url("/api/clips", query)))
     }
 
+    /** Frame rate and count for one clip; zeros mean the recorder could not read them. */
+    @Throws(IOException::class)
+    fun meta(recorder: Recorder, clipId: Long): ClipMeta =
+        parseMeta(getJson(recorder.address.url("/api/clips/$clipId/meta")))
+
     private fun getJson(url: String): Map<String, Any?> {
         http.get(url).use { response ->
             when (response.status) {
@@ -141,6 +160,14 @@ class RecorderClient(private val http: ViewerHttpClient = ViewerHttpClient()) {
     class UnauthorizedException :
         RecorderException("Viewer Link was restarted on the recorder. Scan its code again.")
 }
+
+@Throws(IOException::class)
+internal fun parseMeta(json: Map<String, Any?>): ClipMeta = ClipMeta(
+    durationMs = json.long("durationMs"),
+    // The server writes "0" for an unknown rate and "29.970" otherwise: Long or Double.
+    frameRate = (json["frameRate"] as? Number)?.toDouble() ?: throw IOException("Missing number 'frameRate'"),
+    frameCount = json.long("frameCount")
+)
 
 /** What the recorder generates (a UUID) and all the viewer will accept. */
 internal fun isValidRecorderId(id: String): Boolean =

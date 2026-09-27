@@ -7,6 +7,8 @@ import android.util.Log
 import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import com.mtbanalyzer.clips.ClipRef
+import com.mtbanalyzer.viewer.RemotePlayback
 
 /**
  * Full-screen playback of a single clip. All playback chrome (progress line, title,
@@ -18,6 +20,8 @@ class VideoPlaybackActivity : AppCompatActivity() {
         private const val TAG = "VideoPlaybackActivity"
         const val EXTRA_VIDEO_URI = "video_uri"
         const val EXTRA_VIDEO_NAME = "video_name"
+        /** A [ClipRef.Remote] key instead of a Uri: the clip streams from the paired recorder. */
+        const val EXTRA_REMOTE_CLIP_KEY = "remote_clip_key"
     }
 
     private lateinit var videoPlayerView: VideoPlayerView
@@ -49,16 +53,26 @@ class VideoPlaybackActivity : AppCompatActivity() {
 
     private fun setupVideoData() {
         val videoUri = intent.getStringExtra(EXTRA_VIDEO_URI)?.let { Uri.parse(it) }
+        val remote = intent.getStringExtra(EXTRA_REMOTE_CLIP_KEY)?.let { ClipRef.fromKey(it) as? ClipRef.Remote }
         val videoName = intent.getStringExtra(EXTRA_VIDEO_NAME) ?: "Video"
 
-        if (videoUri == null) {
+        if (videoUri == null && remote == null) {
             Toast.makeText(this, "Error loading video", Toast.LENGTH_LONG).show()
             finish()
             return
         }
 
         videoPlayerView.setTitle(videoName.replace("MTB_", "").replace(".mp4", ""))
-        videoPlayerView.setVideo(videoUri)
+        if (remote != null) {
+            if (!RemotePlayback.attach(this, videoPlayerView, remote)) {
+                // The pairing lives in memory; a restarted process has lost it.
+                Toast.makeText(this, "Connect to the recorder again to play its clips", Toast.LENGTH_LONG).show()
+                finish()
+                return
+            }
+        } else {
+            videoPlayerView.setVideo(videoUri!!)
+        }
 
         videoPlayerView.setOnVideoLoadedListener { duration ->
             Log.d(TAG, "Video loaded with duration: $duration ms")

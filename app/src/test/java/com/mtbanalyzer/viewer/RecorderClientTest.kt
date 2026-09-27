@@ -123,6 +123,8 @@ class RecorderClientTest {
             200,
             clipListJson(listOf(ClipInfo(7, "MTB_a.mp4", 100, 8000, 10, ClipNaming.KIND_IMPORT)), true)
         )
+        request.path == "/api/clips/7/meta" ->
+            HttpResponse.json(200, """{"id":7,"durationMs":8004,"frameRate":29.970,"frameCount":240}""")
         else -> HttpResponse.error(404, "Not found")
     }
 
@@ -147,6 +149,29 @@ class RecorderClientTest {
         } catch (e: RecorderClient.UnauthorizedException) {
             assertTrue(e.message!!.contains("Scan its code again"))
         }
+    }
+
+    @Test
+    fun `meta gives the frame badge its numbers before the file lands`() {
+        val recorder = client.pair(address())
+        assertEquals(ClipMeta(8004, 29.97, 240), client.meta(recorder, 7))
+    }
+
+    @Test
+    fun `meta reads an unknown rate written as a bare zero`() {
+        // The server formats an unknown rate as "0", which parses as a Long, not a Double.
+        assertEquals(
+            ClipMeta(8004, 0.0, 0),
+            parseMeta(JsonReader.parseObject("""{"id":7,"durationMs":8004,"frameRate":0,"frameCount":0}"""))
+        )
+    }
+
+    @Test
+    fun `a missing rate is derived from the frame count, as the local player does`() {
+        assertEquals(30.0, ClipMeta(8000, 0.0, 240).effectiveFrameRate, 1e-9)
+        assertEquals(29.97, ClipMeta(8000, 29.97, 240).effectiveFrameRate, 1e-9)
+        assertEquals(0.0, ClipMeta(8000, 0.0, 0).effectiveFrameRate, 1e-9)
+        assertEquals(0.0, ClipMeta(0, 0.0, 240).effectiveFrameRate, 1e-9)
     }
 
     @Test(expected = IOException::class)
