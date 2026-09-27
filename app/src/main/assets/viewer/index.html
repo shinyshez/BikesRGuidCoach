@@ -77,11 +77,17 @@ color:#fff;font-size:13px;opacity:.85;overflow:hidden;text-overflow:ellipsis;whi
 (function () {
   "use strict";
 
+  // New clips arrive over /api/events as they are saved. Polling stays as the fallback: every
+  // 5s while the stream is down (old browser, 503 when the recorder is at its viewer cap,
+  // out of range), and a slow 30s safety net while it is up.
   var POLL_MS = 5000;
+  var POLL_LIVE_MS = 30000;
   var clips = [];
   var seen = Object.create(null);
   var firstLoadDone = false;
   var pollTimer = null;
+  var pollMs = POLL_MS;
+  var events = null;
 
   var listEl = document.getElementById("list");
   var emptyEl = document.getElementById("empty");
@@ -262,26 +268,60 @@ color:#fff;font-size:13px;opacity:.85;overflow:hidden;text-overflow:ellipsis;whi
 
   function startPolling() {
     stopPolling();
-    pollTimer = setInterval(function () { refresh(true); }, POLL_MS);
+    pollTimer = setInterval(function () { refresh(true); }, pollMs);
   }
 
   function stopPolling() {
     if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
   }
 
+  function setPollRate(ms) {
+    if (ms === pollMs) { return; }
+    pollMs = ms;
+    if (pollTimer) { startPolling(); }
+  }
+
+  function startLive() {
+    if (events || !window.EventSource) { return; }
+    events = new EventSource("/api/events");
+    events.addEventListener("open", function () {
+      setPollRate(POLL_LIVE_MS);
+      // A (re)connect may have missed clips saved while the stream was down.
+      if (playerEl.hidden) { refresh(true); }
+    });
+    events.addEventListener("clip", function () {
+      // While a clip plays the list waits; close() refreshes it.
+      if (playerEl.hidden) { refresh(true); }
+    });
+    events.addEventListener("error", function () {
+      setPollRate(POLL_MS);
+      // CONNECTING means the browser is retrying by itself; CLOSED (a 401 or 503) means
+      // it has given up, so polling carries on alone.
+      if (events && events.readyState === EventSource.CLOSED) { events = null; }
+    });
+  }
+
+  function stopLive() {
+    if (events) { events.close(); events = null; }
+    setPollRate(POLL_MS);
+  }
+
   document.getElementById("close").addEventListener("click", close);
   document.getElementById("retry").addEventListener("click", function () { refresh(); });
 
   document.addEventListener("visibilitychange", function () {
-    if (document.hidden) { stopPolling(); }
-    else if (playerEl.hidden) { startPolling(); refresh(true); }
+    if (document.hidden) { stopPolling(); stopLive(); }
+    else {
+      startLive();
+      if (playerEl.hidden) { startPolling(); refresh(true); }
+    }
   });
 
   window.addEventListener("keydown", function (event) {
     if (event.key === "Escape" && !playerEl.hidden) { close(); }
   });
 
-  refresh().then(startPolling);
+  refresh().then(function () { startPolling(); startLive(); });
 }());
 </script>
 </body>

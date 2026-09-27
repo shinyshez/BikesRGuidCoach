@@ -3,7 +3,7 @@
 Make the viewing phone the real app: remote clips in the actual gallery and
 `VideoPlayerView`, with the pose overlay, drawing and side-by-side comparison.
 
-**Status**: draft. Built so far: the cleartext spike (§4), M0, M1 and M2 (§9). Q1 and Q2 are decided (§12).
+**Status**: draft. Built so far: the cleartext spike (§4), M0, M1, M2 and M4 (§9). Q1 and Q2 are decided (§12).
 **Builds on**: `ViewerLink-Phase1-Spec.md` (API contract, security model).
 **Roadmap**: `ViewerLink-Roadmap.html`.
 
@@ -206,6 +206,17 @@ failed write instead of a worker parked forever. The stream is not a source of t
 - **The browser page** switches from 5s polling to `EventSource` and keeps polling as a
   fallback. That is a small change to `index.html`.
 
+*As built in M4:* the `ContentObserver` (`MediaStoreWatcher`, only while Viewer Link runs) is
+the one source; it fires for a finished recording (IS_PENDING cleared) and an import alike, so
+nothing hooks `RecordingManager`. It bumps `ClipChangeSignal`, a version counter, and each
+`ClipEventStream` diffs the finished list against what it last sent, so observer noise while a
+clip is written costs a query, not an event. Deletes go out as `event: removed`
+(`data: {"id":…}`). Streams do not take a worker: they are handed to their own thread, capped
+at `MAX_EVENT_STREAMS` (4; a fifth viewer gets 503), so live viewers never starve clip and
+thumbnail requests. The app's gallery listens only while it is on screen with the recorder tab
+open, reloads the list on each event and on every reconnect (2s→30s backoff), and stops on a
+401. The page polls every 30s while the stream is up and every 5s when it is not.
+
 ## 9. Milestones
 
 Each milestone is a PR that leaves main shippable.
@@ -216,7 +227,7 @@ Each milestone is a PR that leaves main shippable.
 | M1 ✓ | Pairing (§5), remote gallery tab, download-then-play | A remote clip opens in `VideoPlayerView` with pose and draw working (it plays from the cached file, so `VideoPlayerView` is untouched) |
 | M2 ✓ | Stream while downloading (§7): `PlayableClip`, `RemoteClipDataSource` in `VideoPlayerView` | Playback starts before the download finishes; pose becomes available when it does |
 | M3 | Compare across sources | A local and a remote clip compare side by side, with lock/offset remembered |
-| M4 | SSE (§8) for app and page | A clip saved on the recorder appears on both viewers within a second |
+| M4 ✓ | SSE (§8) for app and page | A clip saved on the recorder appears on both viewers within a second |
 
 M1 is deliberately "download, then play". It ships the whole feature with no change to
 `VideoPlayerView`, and M2 is then a pure latency improvement that can be measured against it.

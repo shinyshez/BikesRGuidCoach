@@ -45,6 +45,7 @@ class ViewerLinkServerInstrumentedTest {
 
     private lateinit var context: Context
     private lateinit var server: ViewerLinkServer
+    private lateinit var routes: ViewerLinkRoutes
     private var port = 0
     private var clipUri: Uri? = null
     private var clipId = -1L
@@ -62,7 +63,7 @@ class ViewerLinkServerInstrumentedTest {
         assertNotNull("test clip should import", clipUri)
         clipId = ContentUris.parseId(clipUri!!)
 
-        val routes = ViewerLinkRoutes(
+        routes = ViewerLinkRoutes(
             context = context,
             clips = LocalClipSource(context),
             thumbnails = ClipThumbnails(context),
@@ -95,6 +96,45 @@ class ViewerLinkServerInstrumentedTest {
     fun tearDown() {
         if (::server.isInitialized) server.stop()
         clipUri?.let { context.contentResolver.delete(it, null, null) }
+    }
+
+    /**
+     * M4 end to end on the recorder side: the real MediaStore observer, server and stream.
+     * With /api/events open, a clip imported on the device arrives as an event.
+     */
+    @Test
+    fun events_announceAClipImportedWhileTheViewerListens() = runBlocking {
+        MediaStoreWatcher(context, routes.changes).use {
+            val recorder = Recorder(
+                RecorderAddress("127.0.0.1", port, TOKEN),
+                RecorderHealth("test", 1, 1, RecorderIdentity.id(context))
+            )
+            var second: Uri? = null
+            RecorderClient().openEvents(recorder).use { stream ->
+                val source = File(context.cacheDir, "viewer_link_live.mp4")
+                InstrumentationRegistry.getInstrumentation().context.resources
+                    .openRawResource(com.mtbanalyzer.test.R.raw.test_clip)
+                    .use { input -> source.outputStream().use { input.copyTo(it) } }
+                try {
+                    second = VideoImporter(context).import(Uri.fromFile(source))
+                    assertNotNull("second clip should import", second)
+                    val id = ContentUris.parseId(second!!)
+
+                    var event: ServerEvent? = null
+                    val reader = Thread { event = stream.next() }.apply { start() }
+                    reader.join(20_000)
+                    assertEquals("clip", event?.type)
+                    assertTrue(event?.data, event!!.data.contains("\"id\":$id,"))
+                } finally {
+                    second?.let { context.contentResolver.delete(it, null, null) }
+                }
+            }
+        }
+    }
+
+    @Test
+    fun events_needAToken() {
+        assertEquals(401, connect("/api/events").responseCode)
     }
 
     @Test

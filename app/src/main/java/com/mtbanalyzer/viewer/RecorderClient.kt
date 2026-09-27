@@ -94,6 +94,8 @@ class RecorderClient(private val http: ViewerHttpClient = ViewerHttpClient()) {
 
     companion object {
         const val SUPPORTED_API_VERSION = 1L
+        /** Three missed keepalives (15s each) before a quiet stream counts as dead. */
+        private const val EVENTS_READ_TIMEOUT_MS = 45_000
         private const val MAX_JSON_BYTES = 4 * 1024 * 1024
     }
 
@@ -139,6 +141,23 @@ class RecorderClient(private val http: ViewerHttpClient = ViewerHttpClient()) {
     @Throws(IOException::class)
     fun meta(recorder: Recorder, clipId: Long): ClipMeta =
         parseMeta(getJson(recorder.address.url("/api/clips/$clipId/meta")))
+
+    /**
+     * Opens the recorder's `/api/events` stream. Blocking reads; close the returned stream
+     * from any thread to stop. The read timeout is well past the server's 15s keepalive,
+     * so a quiet stream is not mistaken for a dead one.
+     */
+    @Throws(IOException::class)
+    fun openEvents(recorder: Recorder): ServerEventStream {
+        val response = eventsHttp.get(recorder.address.url("/api/events"))
+        when (response.status) {
+            200 -> return ServerEventStream(response)
+            401 -> { response.close(); throw UnauthorizedException() }
+            else -> { response.close(); throw IOException("Recorder answered HTTP ${response.status}") }
+        }
+    }
+
+    private val eventsHttp = ViewerHttpClient(readTimeoutMs = EVENTS_READ_TIMEOUT_MS)
 
     private fun getJson(url: String): Map<String, Any?> {
         http.get(url).use { response ->
@@ -192,4 +211,58 @@ internal fun parseClips(recorderId: String, json: Map<String, Any?>): List<Remot
             )
         )
     }
+}
+
+/** One Server-Sent Event: `event:` (default "message") and its joined `data:` lines. */
+data class ServerEvent(val type: String, val data: String)
+
+/**
+ * Line-at-a-time SSE parsing (the subset ClipEventStream writes, read the way the
+ * EventSource spec says): comments and `retry:` are skipped, a blank line dispatches.
+ */
+internal class SseParser {
+    private var type: String? = null
+    private val data = StringBuilder()
+    private var hasData = false
+
+    fun feed(line: String): ServerEvent? {
+        if (line.isEmpty()) {
+            val event = if (hasData || type != null) ServerEvent(type ?: "message", data.toString()) else null
+            type = null
+            data.setLength(0)
+            hasData = false
+            return event
+        }
+        if (line.startsWith(":")) return null
+        val colon = line.indexOf(':')
+        val field = if (colon < 0) line else line.substring(0, colon)
+        var value = if (colon < 0) "" else line.substring(colon + 1)
+        if (value.startsWith(" ")) value = value.substring(1)
+        when (field) {
+            "event" -> type = value
+            "data" -> {
+                if (hasData) data.append('\n')
+                data.append(value)
+                hasData = true
+            }
+        }
+        return null
+    }
+}
+
+/** An open `/api/events` stream. [next] blocks; [close] from another thread unblocks it. */
+class ServerEventStream internal constructor(private val response: RemoteResponse) : java.io.Closeable {
+    private val reader = response.body.bufferedReader(Charsets.UTF_8)
+    private val parser = SseParser()
+
+    /** The next event, or null when the recorder ended the stream. */
+    @Throws(IOException::class)
+    fun next(): ServerEvent? {
+        while (true) {
+            val line = reader.readLine() ?: return null
+            parser.feed(line)?.let { return it }
+        }
+    }
+
+    override fun close() = response.close()
 }

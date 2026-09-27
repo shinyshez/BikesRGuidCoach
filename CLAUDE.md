@@ -234,7 +234,8 @@ a small read-only HTTP server and the viewer drives it.
 - The viewer joins that hotspot and scans the code. **No app install on the viewer**: it is a
   web page (`assets/viewer/index.html`), so an iPhone or a borrowed phone works
 - The page mirrors the gallery — 9:16 tiles grouped by day, time and duration, `import` tag —
-  and polls every 5s, so a run recorded after it is open appears on its own
+  and listens on `/api/events` (SSE), so a run recorded after it is open appears within a
+  second; it falls back to polling every 5s while the stream is down
 - A foreground service keeps the socket alive once the recorder's screen goes off; the
   notification carries a Stop action. Off by default, and the server is never started on launch
 - **Viewer app** (Phase 2, M1): the link button top-right of the gallery pairs with a recorder
@@ -244,12 +245,14 @@ a small read-only HTTP server and the viewer drives it.
   the whole file alongside (`cacheDir/remote-clips/<recorderId>/<id>.mp4`, 256MB LRU). Pose
   and exact frame numbers read that file (`PlayableClip.framesUri`); until it lands the frame
   badge uses `/meta` and a Pose tap shows a spinner and turns on by itself. A cached clip just
-  plays from the file. Long-press offers **Save to this phone**.
+  plays from the file. Long-press offers **Save to this phone**. While the recorder tab is on
+  screen the gallery listens on `/api/events` and reloads when a clip lands (M4).
   Recorder clips never swipe-delete and have no Import or Compare (compare across sources is
   M3). Pairing is in memory only; a Viewer Link restart on the recorder means scanning again
 
 Implementation lives in `com.mtbanalyzer.viewer`. `ViewerLinkServer` is a hand-rolled
-HTTP/1.1 server (five read-only endpoints), `ViewerLinkRoutes` holds the API. The clip list
+HTTP/1.1 server (six read-only endpoints), `ViewerLinkRoutes` holds the API. `/api/events` streams on its own threads (max 4), not the
+worker pool, woken by `MediaStoreWatcher` through `ClipChangeSignal`. The clip list
 comes from `clips.LocalClipSource`, the one MediaStore query shared with the gallery and the
 capture strip; the server passes `finishedOnly = true` so it never serves a recording still
 being written, while the gallery lists every row as it always has. Anything persisted against

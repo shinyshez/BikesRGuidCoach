@@ -47,11 +47,28 @@ class MalformedRequestException(message: String) : IOException(message)
 class HttpResponse(
     val status: Int,
     val headers: LinkedHashMap<String, String> = LinkedHashMap(),
+    /** [UNBOUNDED] for a body that runs until it ends: no Content-Length, then close. */
     val contentLength: Long = 0L,
     val body: ((OutputStream) -> Unit)? = null
 ) {
+    /** A long-lived body (an event stream); the server gives it its own thread. */
+    val isUnbounded: Boolean get() = contentLength == UNBOUNDED
+
     companion object {
         private val UTF8: Charset = Charsets.UTF_8
+        const val UNBOUNDED = -1L
+
+        /**
+         * Server-Sent Events. No Content-Length and Connection: close, so the body simply
+         * runs until [writer] returns or the viewer goes away; ViewerHttpClient and
+         * EventSource both read such a body to EOF.
+         */
+        fun eventStream(writer: (OutputStream) -> Unit): HttpResponse {
+            val headers = LinkedHashMap<String, String>()
+            headers["Content-Type"] = "text/event-stream; charset=utf-8"
+            headers["Cache-Control"] = "no-store"
+            return HttpResponse(200, headers, UNBOUNDED, writer)
+        }
 
         fun bytes(
             status: Int,
@@ -205,8 +222,12 @@ object HttpWriter {
         head.append("HTTP/1.1 ").append(response.status).append(' ')
             .append(REASONS[response.status] ?: "Status").append("\r\n")
         head.append("Server: MTBAnalyzer\r\n")
-        head.append("Content-Length: ").append(response.contentLength).append("\r\n")
-        head.append("Connection: ").append(if (keepAlive) "keep-alive" else "close").append("\r\n")
+        // Without a length the end of the body is the end of the connection.
+        val persistent = keepAlive && !response.isUnbounded
+        if (!response.isUnbounded) {
+            head.append("Content-Length: ").append(response.contentLength).append("\r\n")
+        }
+        head.append("Connection: ").append(if (persistent) "keep-alive" else "close").append("\r\n")
         for ((name, value) in response.headers) {
             head.append(name).append(": ").append(value).append("\r\n")
         }

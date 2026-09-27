@@ -28,6 +28,7 @@ object ViewerLinkController {
 
     private val listeners = CopyOnWriteArrayList<(Status) -> Unit>()
     private var server: ViewerLinkServer? = null
+    private var watcher: MediaStoreWatcher? = null
 
     @Volatile
     private var status = Status(running = false)
@@ -67,6 +68,7 @@ object ViewerLinkController {
             val instance = ViewerLinkServer(routes)
             val port = instance.start(address, PREFERRED_PORT)
             server = instance
+            watcher = MediaStoreWatcher(app, routes.changes)
             publish(
                 Status(
                     running = true,
@@ -83,6 +85,8 @@ object ViewerLinkController {
 
     @Synchronized
     fun stop() {
+        watcher?.close()
+        watcher = null
         server?.stop()
         server = null
         publish(Status(running = false))
