@@ -20,6 +20,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.pose.Pose
@@ -60,6 +61,8 @@ class VideoPlayerView @JvmOverloads constructor(
     private lateinit var doneDrawingButton: Button
     private lateinit var railDoneButton: ImageButton
     private lateinit var poseToggleButton: ImageButton
+    private lateinit var poseToggleContainer: View
+    private lateinit var posePendingSpinner: ProgressBar
     private lateinit var drawingToggleButton: ImageButton
     private lateinit var loadingIndicator: ProgressBar
     
@@ -74,12 +77,21 @@ class VideoPlayerView @JvmOverloads constructor(
     
     // Media3 ExoPlayer
     private var exoPlayer: ExoPlayer? = null
-    private var videoUri: Uri? = null
+    /** What ExoPlayer plays; http:// for a recorder clip that is streaming. */
+    var playbackUri: Uri? = null
+        private set
+    /** What pose and frame metadata read; null until a recorder clip's download lands. */
+    private var framesUri: Uri? = null
+    /** Frame rate and count from the recorder's /meta, used until [framesUri] arrives. */
+    private var providedFrameInfo: Pair<Double, Long>? = null
     private var isPlaying = false
     private var videoDuration = 0L
     
     // Pose detection
     private var isPoseDetectionEnabled = false
+    /** Pose was asked for before the frames existed; it turns on when they arrive. */
+    private var isPosePending = false
+    private var onFramesNeededListener: (() -> Unit)? = null
     private lateinit var poseDetector: PoseDetector
     private var processingJob: Job? = null
     private val coroutineScope = CoroutineScope(Dispatchers.IO)
@@ -157,6 +169,8 @@ class VideoPlayerView @JvmOverloads constructor(
         doneDrawingButton = findViewById(R.id.doneDrawingButton)
         railDoneButton = findViewById(R.id.railDoneButton)
         poseToggleButton = findViewById(R.id.poseToggleButton)
+        poseToggleContainer = findViewById(R.id.poseToggleContainer)
+        posePendingSpinner = findViewById(R.id.posePendingSpinner)
         drawingToggleButton = findViewById(R.id.drawingToggleButton)
         loadingIndicator = findViewById(R.id.loadingIndicator)
         
@@ -284,17 +298,82 @@ class VideoPlayerView @JvmOverloads constructor(
         })
     }
     
-    fun setVideo(uri: Uri) {
-        videoUri = uri
-        val mediaItem = MediaItem.fromUri(uri)
-        exoPlayer?.setMediaItem(mediaItem)
+    fun setVideo(uri: Uri) = setClip(PlayableClip.local(uri))
+
+    /**
+     * Plays [clip.playbackUri] at once. Pose and exact frame metadata wait for
+     * [clip.framesUri], which a recorder clip gets later through [setFramesUri].
+     */
+    @androidx.annotation.OptIn(markerClass = [UnstableApi::class])
+    fun setClip(clip: PlayableClip) {
+        playbackUri = clip.playbackUri
+        framesUri = clip.framesUri
+        val mediaItem = MediaItem.fromUri(clip.playbackUri)
+        val factory = clip.dataSourceFactory
+        if (factory == null) {
+            exoPlayer?.setMediaItem(mediaItem)
+        } else {
+            exoPlayer?.setMediaSource(DefaultMediaSourceFactory(factory).createMediaSource(mediaItem))
+        }
         exoPlayer?.prepare()
     }
-    
+
+    /**
+     * The local copy of a streaming clip has landed: frame metadata becomes exact, and a
+     * Pose tap made while waiting takes effect now.
+     */
+    fun setFramesUri(uri: Uri) {
+        framesUri = uri
+        if (videoDuration > 0) {
+            extractVideoMetadata()
+            updateTimeDisplay(getCurrentPosition())
+        }
+        val wanted = isPosePending
+        setPosePending(false)
+        if (wanted && !isPoseDetectionEnabled) togglePoseDetection()
+    }
+
+    /** The local copy could not be made; a pending Pose tap is dropped (the caller explains). */
+    fun setFramesUnavailable() {
+        setPosePending(false)
+    }
+
+    /** Frame rate and count to show until the frames arrive (the recorder's /meta). */
+    fun setFrameInfo(frameRate: Double, frameCount: Long) {
+        if (frameRate <= 0.0) return
+        providedFrameInfo = frameRate to frameCount
+        if (framesUri == null && videoDuration > 0) {
+            extractVideoMetadata()
+            updateTimeDisplay(getCurrentPosition())
+        }
+    }
+
+    /** Called when Pose is tapped before the frames exist, e.g. to retry a failed download. */
+    fun setOnFramesNeededListener(listener: () -> Unit) {
+        onFramesNeededListener = listener
+    }
+
+    fun hasFrames(): Boolean = framesUri != null
+
+    private fun setPosePending(pending: Boolean) {
+        isPosePending = pending
+        posePendingSpinner.visibility = if (pending) View.VISIBLE else View.GONE
+        poseToggleButton.alpha = if (pending) 0.5f else 1f
+    }
+
     private fun extractVideoMetadata() {
+        val uri = framesUri
+        if (uri == null) {
+            // Streaming, no local copy yet: the recorder's numbers, else a 30fps guess.
+            val (rate, count) = providedFrameInfo ?: (30.0 to 0L)
+            frameRate = rate
+            frameDurationMs = 1000.0 / frameRate
+            totalFrames = if (count > 0) count else ((videoDuration * frameRate) / 1000.0).toLong()
+            return
+        }
         try {
             val retriever = MediaMetadataRetriever()
-            retriever.setDataSource(context, videoUri)
+            retriever.setDataSource(context, uri)
             
             // Try to get frame rate from metadata
             val frameRateStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CAPTURE_FRAMERATE)
@@ -339,7 +418,13 @@ class VideoPlayerView @JvmOverloads constructor(
         setupFrameStepButtons()
         
         poseToggleButton.setOnClickListener {
-            togglePoseDetection()
+            if (framesUri == null && !isPoseDetectionEnabled) {
+                // Frames still downloading: remember the tap and show that it is coming.
+                setPosePending(!isPosePending)
+                if (isPosePending) onFramesNeededListener?.invoke()
+            } else {
+                togglePoseDetection()
+            }
         }
         
         drawingToggleButton.setOnClickListener {
@@ -492,7 +577,7 @@ class VideoPlayerView @JvmOverloads constructor(
         // and the play button gives way to Done so the transport reads prev / Done / next.
         drawingToggleButton.isSelected = isDrawingMode
         drawingToolbar.visibility = if (isDrawingMode) View.VISIBLE else View.GONE
-        poseToggleButton.visibility = if (isDrawingMode) View.GONE else View.VISIBLE
+        poseToggleContainer.visibility = if (isDrawingMode) View.GONE else View.VISIBLE
         drawingToggleButton.visibility = if (isDrawingMode) View.GONE else View.VISIBLE
         playPauseButton.visibility = if (isDrawingMode) View.GONE else View.VISIBLE
         doneDrawingButton.visibility = if (isDrawingMode) View.VISIBLE else View.GONE
@@ -949,8 +1034,9 @@ class VideoPlayerView @JvmOverloads constructor(
         coroutineScope.launch {
             try {
                 // Extract current frame using MediaMetadataRetriever for pose detection
+                val uri = framesUri ?: return@launch
                 val retriever = MediaMetadataRetriever()
-                retriever.setDataSource(context, videoUri)
+                retriever.setDataSource(context, uri)
                 
                 val bitmap = retriever.getFrameAtTime(currentPosition * 1000, MediaMetadataRetriever.OPTION_CLOSEST)
                 

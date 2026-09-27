@@ -3,7 +3,7 @@
 Make the viewing phone the real app: remote clips in the actual gallery and
 `VideoPlayerView`, with the pose overlay, drawing and side-by-side comparison.
 
-**Status**: draft. Built so far: the cleartext spike (§4), M0 and M1 (§9). Q1 and Q2 are decided (§12).
+**Status**: draft. Built so far: the cleartext spike (§4), M0, M1 and M2 (§9). Q1 and Q2 are decided (§12).
 **Builds on**: `ViewerLink-Phase1-Spec.md` (API contract, security model).
 **Roadmap**: `ViewerLink-Roadmap.html`.
 
@@ -175,6 +175,13 @@ pruned LRU to a fixed size (256MB) and cleared when a recorder id is forgotten.
 build one with the default factory and the same Uri for both, so their behaviour does
 not change.
 
+*As built in M2:* `setVideo(uri)` stays as `setClip(PlayableClip.local(uri))`, so compare and
+every local caller are untouched. `viewer.RemotePlayback.attach` does the recorder half:
+stream, fetch `/meta` for the badge (deriving the rate from the frame count when the recorder
+reports 0, as ordinary recordings carry no capture rate), download, then `setFramesUri`.
+Leaving the screen abandons the download. A failed download drops a pending Pose tap with a
+toast, and tapping Pose again retries. An already cached clip plays straight from the file.
+
 ## 8. New clips as they happen: SSE
 
 `GET /api/events` (token-gated like `/api/clips`) holds the response open and writes:
@@ -207,7 +214,7 @@ Each milestone is a PR that leaves main shippable.
 |---|---|---|
 | M0 ✓ | `ClipRef`, `LocalClipSource` shared by gallery and server; compare keys move to `ClipRef.key` | Gallery and Viewer Link behave as before; existing tests pass; new tests cover the key migration |
 | M1 ✓ | Pairing (§5), remote gallery tab, download-then-play | A remote clip opens in `VideoPlayerView` with pose and draw working (it plays from the cached file, so `VideoPlayerView` is untouched) |
-| M2 | Stream while downloading (§7): `PlayableClip`, `RemoteClipDataSource` in `VideoPlayerView` | Playback starts before the download finishes; pose becomes available when it does |
+| M2 ✓ | Stream while downloading (§7): `PlayableClip`, `RemoteClipDataSource` in `VideoPlayerView` | Playback starts before the download finishes; pose becomes available when it does |
 | M3 | Compare across sources | A local and a remote clip compare side by side, with lock/offset remembered |
 | M4 | SSE (§8) for app and page | A clip saved on the recorder appears on both viewers within a second |
 

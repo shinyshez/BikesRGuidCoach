@@ -515,15 +515,12 @@ class VideoGalleryActivity : AppCompatActivity() {
         }
     }
 
-    /** Download, then play (M1): the player sees a local file, so pose and drawing just work. */
+    /** Stream to play, download to analyse (M2): the clip starts at once; pose follows the download. */
     private fun playRemote(video: VideoItem) {
-        val recorder = RecorderSession.recorder ?: return
-        pairingUi.fetchClip(recorder, video.id, "Loading ${prettyName(video)}") { file ->
-            startActivity(Intent(this, VideoPlaybackActivity::class.java).apply {
-                putExtra(VideoPlaybackActivity.EXTRA_VIDEO_URI, Uri.fromFile(file).toString())
-                putExtra(VideoPlaybackActivity.EXTRA_VIDEO_NAME, video.displayName)
-            })
-        }
+        startActivity(Intent(this, VideoPlaybackActivity::class.java).apply {
+            putExtra(VideoPlaybackActivity.EXTRA_REMOTE_CLIP_KEY, video.ref.key)
+            putExtra(VideoPlaybackActivity.EXTRA_VIDEO_NAME, video.displayName)
+        })
     }
 
     /** A copy into this phone's own gallery. Nothing is written to the recorder. */

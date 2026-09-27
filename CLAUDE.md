@@ -239,9 +239,12 @@ a small read-only HTTP server and the viewer drives it.
   notification carries a Stop action. Off by default, and the server is never started on launch
 - **Viewer app** (Phase 2, M1): the link button top-right of the gallery pairs with a recorder
   (Play services code scanner, or type the URL). While paired a `This phone | <device>` pill
-  switches source. Tapping a recorder clip downloads it (`RemoteClipCache`, `cacheDir/
-  remote-clips/<recorderId>/<id>.mp4`, 256MB LRU) and opens the local file in the normal
-  player, so pose and drawing work unchanged. Long-press offers **Save to this phone**.
+  switches source. Tapping a recorder clip opens the player at once and streams it
+  (`RemotePlayback`: `RemoteClipDataSource` for ExoPlayer) while `RemoteClipCache` downloads
+  the whole file alongside (`cacheDir/remote-clips/<recorderId>/<id>.mp4`, 256MB LRU). Pose
+  and exact frame numbers read that file (`PlayableClip.framesUri`); until it lands the frame
+  badge uses `/meta` and a Pose tap shows a spinner and turns on by itself. A cached clip just
+  plays from the file. Long-press offers **Save to this phone**.
   Recorder clips never swipe-delete and have no Import or Compare (compare across sources is
   M3). Pairing is in memory only; a Viewer Link restart on the recorder means scanning again
 
