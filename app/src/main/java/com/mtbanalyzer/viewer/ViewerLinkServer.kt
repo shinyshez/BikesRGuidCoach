@@ -28,7 +28,16 @@ class ViewerLinkServer(private val routes: ViewerLinkRoutes) {
         private const val IDLE_TIMEOUT_MS = 15_000
         private const val BACKLOG = 16
         private const val PORT_ATTEMPTS = 10
+        /**
+         * Open /api/events streams. Each holds a thread for as long as its viewer stays, so
+         * they get their own threads rather than [WORKERS], which serve clips and thumbnails.
+         * Multi-viewer is a non-goal (Phase 2 §3); four covers a coach's phone and a browser
+         * or two, and a fifth gets 503 and falls back to polling.
+         */
+        const val MAX_EVENT_STREAMS = 4
     }
+
+    private val eventStreams = java.util.concurrent.Semaphore(MAX_EVENT_STREAMS)
 
     @Volatile private var running = false
     private var serverSocket: ServerSocket? = null
@@ -61,6 +70,7 @@ class ViewerLinkServer(private val routes: ViewerLinkRoutes) {
             Log.w(TAG, "Error closing server socket", e)
         }
         serverSocket = null
+        routes.close() // ends every event stream
         workers?.shutdownNow()
         workers = null
         acceptThread?.join(1_000)
@@ -101,6 +111,7 @@ class ViewerLinkServer(private val routes: ViewerLinkRoutes) {
     }
 
     private fun serve(socket: Socket) {
+        var handedOff = false
         try {
             socket.soTimeout = IDLE_TIMEOUT_MS
             socket.tcpNoDelay = true
@@ -116,6 +127,11 @@ class ViewerLinkServer(private val routes: ViewerLinkRoutes) {
                 } catch (e: Exception) {
                     Log.e(TAG, "Handler failed for ${request.target}", e)
                     HttpResponse.error(500, "Server error")
+                }
+
+                if (response.isUnbounded && request.method != "HEAD") {
+                    handedOff = handOffStream(socket, output, response)
+                    break
                 }
 
                 HttpWriter.write(
@@ -136,8 +152,38 @@ class ViewerLinkServer(private val routes: ViewerLinkRoutes) {
         } catch (e: Exception) {
             Log.w(TAG, "Unexpected error serving connection", e)
         } finally {
-            closeQuietly(socket)
+            if (!handedOff) closeQuietly(socket)
         }
+    }
+
+    /**
+     * Moves an event stream off the worker pool onto its own thread, which owns the socket
+     * from here on. Over [MAX_EVENT_STREAMS] the viewer gets 503 and keeps polling.
+     */
+    private fun handOffStream(socket: Socket, output: BufferedOutputStream, response: HttpResponse): Boolean {
+        if (!eventStreams.tryAcquire()) {
+            HttpWriter.write(output, HttpResponse.error(503, "Too many live viewers"), includeBody = true, keepAlive = false)
+            return false
+        }
+        val thread = Thread({
+            try {
+                // Reads are over; only writes remain, which fail once the viewer has gone.
+                socket.soTimeout = 0
+                HttpWriter.write(output, response, includeBody = true, keepAlive = false)
+            } catch (e: IOException) {
+                Log.d(TAG, "Event stream ended: ${e.message}")
+            } catch (e: InterruptedException) {
+                // Server stopping.
+            } catch (e: Exception) {
+                Log.w(TAG, "Event stream failed", e)
+            } finally {
+                eventStreams.release()
+                closeQuietly(socket)
+            }
+        }, "viewer-link-events")
+        thread.isDaemon = true
+        thread.start()
+        return true
     }
 
     private fun wantsKeepAlive(request: HttpRequest): Boolean =

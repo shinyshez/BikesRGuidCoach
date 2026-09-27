@@ -14,7 +14,7 @@ import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * The read-only viewer API. Five endpoints, no writes — deleting and importing stay on the
+ * The read-only viewer API. Six endpoints, no writes — deleting and importing stay on the
  * recorder, which keeps the whole surface safe to expose on a shared hotspot.
  */
 class ViewerLinkRoutes(
@@ -23,7 +23,9 @@ class ViewerLinkRoutes(
     private val thumbnails: ClipThumbnails,
     private val token: String,
     private val allowedHosts: Set<String>,
-    private val recorderId: String = RecorderIdentity.id(context)
+    private val recorderId: String = RecorderIdentity.id(context),
+    /** Bumped when the clip collection may have changed; drives /api/events. */
+    val changes: ClipChangeSignal = ClipChangeSignal()
 ) {
 
     companion object {
@@ -51,6 +53,7 @@ class ViewerLinkRoutes(
             path == "/favicon.ico" -> HttpResponse.empty(404)
             path == "/api/health" -> health()
             path == "/api/clips" -> authorized(request) { clips(request) }
+            path == "/api/events" -> authorized(request) { events() }
             path.startsWith("/api/clips/") -> authorized(request) { clipRoute(request, path) }
             else -> HttpResponse.error(404, "Not found")
         }
@@ -117,6 +120,17 @@ class ViewerLinkRoutes(
             mapOf("Cache-Control" to "no-store")
         )
     }
+
+    /**
+     * New and removed clips as they happen (Phase 2 spec §8). The server runs the body on a
+     * thread of its own; it ends when the viewer disconnects or [close] is called.
+     */
+    private fun events(): HttpResponse = HttpResponse.eventStream { out ->
+        ClipEventStream(changes, { finishedClips() }).run(out)
+    }
+
+    /** Ends every open event stream; the server calls it on stop. */
+    fun close() = changes.close()
 
     private fun clipRoute(request: HttpRequest, path: String): HttpResponse {
         val rest = path.removePrefix("/api/clips/")

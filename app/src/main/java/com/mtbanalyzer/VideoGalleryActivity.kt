@@ -37,10 +37,14 @@ import com.mtbanalyzer.viewer.RecorderSession
 import com.mtbanalyzer.viewer.RemoteClip
 import com.mtbanalyzer.viewer.RemoteThumb
 import com.mtbanalyzer.viewer.RemoteThumbLoader
+import com.mtbanalyzer.viewer.ServerEventStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.IOException
 
 data class VideoItem(
     val id: Long,
@@ -112,6 +116,10 @@ class VideoGalleryActivity : AppCompatActivity() {
     private var remoteError: String? = null
     private var remoteLoading = false
     private var remoteLoad: Job? = null
+    // Live updates (M4): the recorder's /api/events while its tab is on screen
+    private var liveJob: Job? = null
+    @Volatile private var liveStream: ServerEventStream? = null
+    private var isScreenResumed = false
 
     // Media read permission: without it MediaStore hides videos from a previous install
     private val requestReadPermission = registerForActivityResult(
@@ -307,6 +315,7 @@ class VideoGalleryActivity : AppCompatActivity() {
 
     private fun loadVideos() {
         applySourceUi()
+        syncLiveUpdates()
         if (showingRemote) {
             loadRemoteVideos()
             return
@@ -549,8 +558,74 @@ class VideoGalleryActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        isScreenResumed = true
         // Refresh the list in case videos were deleted/added
         loadVideos()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        isScreenResumed = false
+        stopLiveUpdates()
+    }
+
+    // --- Viewer Link: live updates from the recorder (M4) ------------------------------
+
+    /** Listens while the recorder's clips are on screen; stops otherwise. */
+    private fun syncLiveUpdates() {
+        if (showingRemote && isScreenResumed && RecorderSession.recorder != null) {
+            if (liveJob?.isActive != true) startLiveUpdates()
+        } else {
+            stopLiveUpdates()
+        }
+    }
+
+    /**
+     * Each event just reloads the list; the stream is a nudge, /api/clips is the truth.
+     * A reconnect after a drop reloads too, catching up on whatever was missed. Backs off
+     * from 2s to 30s while the recorder is out of reach, and gives up on a stale token,
+     * which needs a new scan.
+     */
+    private fun startLiveUpdates() {
+        liveJob = lifecycleScope.launch(Dispatchers.IO) {
+            var backoffMs = 2_000L
+            var connectedBefore = false
+            while (isActive) {
+                val recorder = RecorderSession.recorder ?: break
+                try {
+                    recorderClient.openEvents(recorder).use { stream ->
+                        liveStream = stream
+                        if (connectedBefore) reloadRemoteFromEvent()
+                        connectedBefore = true
+                        backoffMs = 2_000L
+                        while (isActive && stream.next() != null) reloadRemoteFromEvent()
+                    }
+                } catch (e: RecorderClient.UnauthorizedException) {
+                    break
+                } catch (e: IOException) {
+                    if (isActive) Log.d(TAG, "Live updates dropped: ${e.message}")
+                } finally {
+                    liveStream = null
+                }
+                delay(backoffMs)
+                backoffMs = (backoffMs * 2).coerceAtMost(30_000L)
+            }
+        }
+    }
+
+    private suspend fun reloadRemoteFromEvent() = withContext(Dispatchers.Main) {
+        if (showingRemote && !isCompareMode) loadRemoteVideos()
+    }
+
+    private fun stopLiveUpdates() {
+        liveJob?.cancel()
+        liveJob = null
+        // A blocked read does not see the cancellation; closing the socket ends it.
+        val stream = liveStream
+        if (stream != null) {
+            liveStream = null
+            lifecycleScope.launch(Dispatchers.IO) { stream.close() }
+        }
     }
     
     private fun setupDragAndDrop() {
