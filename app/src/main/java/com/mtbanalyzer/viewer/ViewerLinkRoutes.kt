@@ -22,7 +22,8 @@ class ViewerLinkRoutes(
     private val clips: LocalClipSource,
     private val thumbnails: ClipThumbnails,
     private val token: String,
-    private val allowedHosts: Set<String>
+    private val allowedHosts: Set<String>,
+    private val recorderId: String = RecorderIdentity.id(context)
 ) {
 
     companion object {
@@ -96,12 +97,14 @@ class ViewerLinkRoutes(
     }
 
     /** Unauthenticated on purpose: the viewer page needs it to tell "wrong network" from
-     *  "wrong token". It reveals a device model and a count, nothing else. */
+     *  "wrong token". It reveals a device model, a count and the random recorder id the
+     *  viewer app keys its cache on, nothing else. */
     private fun health(): HttpResponse {
         val payload = buildString {
             append("{\"ok\":true,\"device\":").append(Json.string(Build.MODEL ?: "Android"))
             append(",\"clips\":").append(finishedClips().size)
-            append(",\"apiVersion\":").append(API_VERSION).append('}')
+            append(",\"apiVersion\":").append(API_VERSION)
+            append(",\"recorderId\":").append(Json.string(recorderId)).append('}')
         }
         return HttpResponse.json(200, payload, mapOf("Cache-Control" to "no-store"))
     }

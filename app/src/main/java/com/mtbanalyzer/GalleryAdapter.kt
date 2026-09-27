@@ -136,7 +136,7 @@ class GalleryAdapter(
             tile.contentDescription = video.displayName.removePrefix("MTB_").removeSuffix(".mp4")
 
             Glide.with(itemView.context)
-                .load(video.uri)
+                .load(video.thumbnail)
                 .apply(RequestOptions().centerCrop())
                 .into(thumbnail)
 
