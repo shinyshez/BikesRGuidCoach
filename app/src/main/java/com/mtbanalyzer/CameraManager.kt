@@ -6,6 +6,7 @@ import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.video.*
 import androidx.camera.view.PreviewView
+import com.mtbanalyzer.viewer.LiveFrameTap
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
 import java.util.concurrent.ExecutorService
@@ -145,7 +146,8 @@ class CameraManager(
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
             .build()
             .also {
-                it.setAnalyzer(cameraExecutor, analyzer)
+                // Wrapped so the viewer link's live view can borrow a frame now and then
+                it.setAnalyzer(cameraExecutor, LiveFrameTap(analyzer))
             }
 
         val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA

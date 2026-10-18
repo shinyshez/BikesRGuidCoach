@@ -16,7 +16,7 @@ import java.util.concurrent.RejectedExecutionException
 /**
  * A small HTTP/1.1 server for the viewer API.
  *
- * Hand-rolled rather than pulled in: the surface is five read-only endpoints, and the one
+ * Hand-rolled rather than pulled in: the surface is six read-only endpoints, and the one
  * genuinely fiddly part (Range) has to be exactly right either way. If Phase 3 adds writes,
  * this is the point to reconsider and move to a real server library.
  */
@@ -24,7 +24,8 @@ class ViewerLinkServer(private val routes: ViewerLinkRoutes) {
 
     companion object {
         private const val TAG = "ViewerLinkServer"
-        private const val WORKERS = 4
+        // Each keep-alive connection holds a worker; the live view keeps one busy for good
+        private const val WORKERS = 6
         private const val IDLE_TIMEOUT_MS = 15_000
         private const val BACKLOG = 16
         private const val PORT_ATTEMPTS = 10

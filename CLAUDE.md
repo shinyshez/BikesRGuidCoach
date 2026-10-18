@@ -237,11 +237,23 @@ a small read-only HTTP server and the viewer drives it.
   and polls every 5s, so a run recorded after it is open appears on its own
 - A foreground service keeps the socket alive once the recorder's screen goes off; the
   notification carries a Stop action. Off by default, and the server is never started on launch
+- **Live** (header button) shows what the recorder's camera sees, about 5 fps, for framing
+  the shot, with an optional rule-of-thirds grid. It only works while the capture screen is
+  open on the recorder; with the screen off the page says so instead of freezing
 
 Implementation lives in `com.mtbanalyzer.viewer`. `ViewerLinkServer` is a hand-rolled
-HTTP/1.1 server (five read-only endpoints), `ViewerLinkRoutes` holds the API, `ClipCatalog`
+HTTP/1.1 server (six read-only endpoints), `ViewerLinkRoutes` holds the API, `ClipCatalog`
 repeats the gallery's MediaStore query rather than sharing it so the viewer cannot regress
 the gallery.
+
+The live view borrows the detector's `ImageAnalysis` frames: the camera already binds its
+three use cases, so there is no stream to spare. `LiveFrameTap` wraps the analyzer in
+`CameraManager` and asks `LiveFrameHub` on every frame whether to copy one; the answer is no
+unless a viewer has asked within the last 3s, so with nobody watching it costs one
+comparison per frame. Rotation and JPEG run on their own thread (`YuvFrames` is pure and
+unit-tested). `GET /api/live?after=<seq>` long-polls for one JPEG newer than `seq` (204 with
+`X-Camera: on|off` when none arrives in 2.5s) rather than an endless MJPEG response, so every
+request ends and a slow viewer just gets fewer frames.
 
 Two details worth knowing before changing any of it:
 

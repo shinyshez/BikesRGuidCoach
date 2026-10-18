@@ -21,6 +21,7 @@ import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.URL
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Drives the real server over loopback against a real MediaStore clip.
@@ -47,6 +48,7 @@ class ViewerLinkServerInstrumentedTest {
     private var port = 0
     private var clipUri: Uri? = null
     private var clipId = -1L
+    private val live = LiveFrameHub()
 
     @Before
     fun setUp() = runBlocking {
@@ -66,7 +68,8 @@ class ViewerLinkServerInstrumentedTest {
             catalog = ClipCatalog(context),
             thumbnails = ClipThumbnails(context),
             token = TOKEN,
-            allowedHosts = setOf("127.0.0.1", "localhost")
+            allowedHosts = setOf("127.0.0.1", "localhost"),
+            live = live
         )
         server = ViewerLinkServer(routes)
         // Port 0: the OS picks a free one, so twelve sequential tests can never collide.
@@ -202,6 +205,53 @@ class ViewerLinkServerInstrumentedTest {
         assertEquals(200, withCookie.responseCode)
         val body = withCookie.inputStream.readBytes().toString(Charsets.UTF_8)
         assertTrue(body, body.contains("MTB Analyzer"))
+    }
+
+    @Test
+    fun live_needsAToken() {
+        assertEquals(401, connect("/api/live").responseCode)
+    }
+
+    @Test
+    fun live_reportsTheCameraOffWhenNoFramesArrive() {
+        val connection = connect("/api/live?t=$TOKEN")
+        assertEquals(204, connection.responseCode)
+        assertEquals("off", connection.getHeaderField("X-Camera"))
+    }
+
+    @Test
+    fun live_servesTheNextFrameAsAJpeg() {
+        val jpeg = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 1, 2, 3)
+        // Stand in for the camera: frames keep arriving, and once a request is waiting the
+        // hub lets one through. Only the first is published, so later polls see none.
+        val running = AtomicBoolean(true)
+        val camera = Thread {
+            var published = false
+            while (running.get()) {
+                if (live.onCameraFrame() && !published) {
+                    live.publish(jpeg, 4, 2)
+                    published = true
+                }
+                Thread.sleep(20)
+            }
+        }
+        camera.start()
+
+        val connection = connect("/api/live?t=$TOKEN")
+        assertEquals(200, connection.responseCode)
+        assertEquals("image/jpeg", connection.getHeaderField("Content-Type"))
+        assertEquals("1", connection.getHeaderField("X-Frame-Seq"))
+        assertTrue(connection.inputStream.readBytes().contentEquals(jpeg))
+
+        try {
+            // Already seen: the next poll waits, then reports the camera as still running.
+            val next = connect("/api/live?t=$TOKEN&after=1")
+            assertEquals(204, next.responseCode)
+            assertEquals("on", next.getHeaderField("X-Camera"))
+        } finally {
+            running.set(false)
+            camera.join()
+        }
     }
 
     /** The descriptor length, which is what the server reports — not the MediaStore column. */

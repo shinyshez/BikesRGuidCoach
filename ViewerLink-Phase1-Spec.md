@@ -39,7 +39,7 @@ server on the recorder.
 | Phase 2 | Native "Viewer mode" — remote clips in the real gallery and `VideoPlayerView`, with pose overlay, drawing and side-by-side comparison |
 | Phase 2 | Server-sent events so a new clip appears on the viewer the instant it is saved |
 | Phase 3 | Control channel — arm/disarm Auto, trigger a recording, change duration from the viewer |
-| Not planned here | Live camera preview streaming. `CameraManager.kt:64,141,144` already binds Preview + `VideoCapture<Recorder>` + `ImageAnalysis`, which is the three-use-case limit on most devices. There is no spare stream for an encoder tap, and re-encoding from `ImageAnalysis` would steal frames from the detector. Treat it as a separate project |
+| Added after Phase 1 | Live camera preview for framing (`GET /api/live`, below). Full-rate video streaming stays out: `CameraManager` already binds Preview + `VideoCapture<Recorder>` + `ImageAnalysis`, the three-use-case limit on most devices, so there is no spare stream for an encoder tap. The live view instead borrows a few analysis frames a second as JPEGs, and only while a viewer is asking |
 
 Also explicitly out of scope for Phase 1: deleting or importing from the viewer (the API is
 **read-only**), multi-viewer sync, transcoding, and any cloud path.
@@ -191,6 +191,19 @@ Missing media-read permission is **not** an error. MediaStore still returns the 
 install owns, so failing the request would hide clips the viewer could otherwise watch.
 `/api/clips` instead carries `"mediaPermission": false` and the page explains that older
 clips are hidden — the same behaviour as the gallery, which lists what it can see.
+
+### `GET /api/live?after=<seq>` (added after Phase 1)
+
+One JPEG of what the recorder's camera sees, for framing. Long-polled: the request waits up
+to 2.5s for a frame newer than `after` (0 for "any"), then answers:
+
+- `200 image/jpeg` with `X-Frame-Seq: <seq>`; pass that back as `after` on the next request
+- `204` with `X-Camera: on` (still waiting) or `X-Camera: off` (the capture screen is not
+  open, so no analysis frames are arriving)
+
+Frames are upright (rotated on the recorder), about 640×480, JPEG quality 60, at most one per
+200ms. The recorder encodes nothing unless a request has come in within the last 3s. Needs
+the token like every other `/api/*` route.
 
 ## 7. Security model
 

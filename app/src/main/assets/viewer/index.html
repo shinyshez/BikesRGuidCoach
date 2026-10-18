@@ -16,6 +16,10 @@ background:linear-gradient(180deg,var(--bg) 70%,rgba(14,14,16,0));display:flex;
 align-items:baseline;gap:8px}
 header h1{font-size:17px;margin:0;font-weight:650;letter-spacing:.2px}
 header span{color:var(--dim);font-size:13px}
+#liveOpen{margin-left:auto;background:var(--accent);color:#fff;border:0;border-radius:16px;
+padding:6px 14px 6px 12px;font-size:13px;font-weight:650;cursor:pointer;display:flex;
+align-items:center;gap:6px}
+#liveOpen::before{content:"";width:8px;height:8px;border-radius:4px;background:#ff4d4d}
 main{padding:0 16px 40px}
 .day{color:var(--dim);font-size:13px;font-weight:600;margin:18px 2px 8px;
 text-transform:none;letter-spacing:.2px}
@@ -58,11 +62,37 @@ height:40px;border-radius:20px;border:0;background:rgba(0,0,0,.55);color:#fff;fo
 line-height:1;cursor:pointer}
 #title{position:absolute;top:calc(env(safe-area-inset-top,0px) + 18px);left:16px;right:64px;
 color:#fff;font-size:13px;opacity:.85;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#live{position:fixed;inset:0;background:#000;z-index:30;display:flex;align-items:center;
+justify-content:center}
+#liveFrame{position:relative;max-width:100%;max-height:100%;display:flex}
+#liveImg{display:block;max-width:100vw;max-height:100vh;max-height:100dvh;object-fit:contain}
+/* Thirds, for framing. Drawn over the image box only, so the lines land on the shot. */
+#liveGrid{position:absolute;inset:0;pointer-events:none;
+background:linear-gradient(90deg,transparent calc(33.333% - .5px),rgba(255,255,255,.45) 0,
+rgba(255,255,255,.45) calc(33.333% + .5px),transparent 0,transparent calc(66.667% - .5px),
+rgba(255,255,255,.45) 0,rgba(255,255,255,.45) calc(66.667% + .5px),transparent 0),
+linear-gradient(180deg,transparent calc(33.333% - .5px),rgba(255,255,255,.45) 0,
+rgba(255,255,255,.45) calc(33.333% + .5px),transparent 0,transparent calc(66.667% - .5px),
+rgba(255,255,255,.45) 0,rgba(255,255,255,.45) calc(66.667% + .5px),transparent 0)}
+#liveBadge{position:absolute;top:calc(env(safe-area-inset-top,0px) + 18px);left:16px;
+font-size:11px;font-weight:700;letter-spacing:.5px;padding:3px 7px;border-radius:6px;
+background:#d92d2d;color:#fff}
+#liveBadge.stale{background:rgba(255,255,255,.2)}
+#liveGridToggle{position:absolute;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);
+right:16px;border:0;border-radius:16px;padding:7px 14px;font-size:13px;font-weight:600;
+background:rgba(0,0,0,.55);color:#fff;cursor:pointer}
+#liveGridToggle[aria-pressed="true"]{background:#fff;color:#000}
+#liveMsg{position:absolute;left:24px;right:24px;top:50%;transform:translateY(-50%);
+text-align:center;color:#d8d8dc;font-size:14px;line-height:1.5}
+#liveClose{position:absolute;top:calc(env(safe-area-inset-top,0px) + 10px);right:12px;
+width:40px;height:40px;border-radius:20px;border:0;background:rgba(0,0,0,.55);color:#fff;
+font-size:20px;line-height:1;cursor:pointer}
 [hidden]{display:none!important}
 </style>
 </head>
 <body>
-<header><h1>MTB Analyzer</h1><span id="count"></span></header>
+<header><h1>MTB Analyzer</h1><span id="count"></span>
+<button id="liveOpen" type="button">Live</button></header>
 <div id="banner" hidden></div>
 <main id="list"></main>
 <div id="empty" hidden>No clips yet. Recordings appear here as they happen.</div>
@@ -72,6 +102,14 @@ color:#fff;font-size:13px;opacity:.85;overflow:hidden;text-overflow:ellipsis;whi
   <video id="video" controls playsinline preload="metadata"></video>
   <div id="title"></div>
   <button id="close" type="button" aria-label="Close">&times;</button>
+</div>
+<div id="live" hidden>
+  <div id="liveFrame"><img id="liveImg" alt="Live view from the recorder">
+  <div id="liveGrid" hidden></div></div>
+  <div id="liveMsg">Connecting to the camera…</div>
+  <span id="liveBadge" class="stale">LIVE</span>
+  <button id="liveGridToggle" type="button" aria-pressed="false">Grid</button>
+  <button id="liveClose" type="button" aria-label="Close live view">&times;</button>
 </div>
 <script>
 (function () {
@@ -269,16 +307,111 @@ color:#fff;font-size:13px;opacity:.85;overflow:hidden;text-overflow:ellipsis;whi
     if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
   }
 
+  // --- live view ------------------------------------------------------------------
+  // Long-polls /api/live for one JPEG at a time: a request names the frame it already has
+  // and the recorder answers when a newer one exists. A frame is only ever encoded while a
+  // request like this is outstanding, so closing the view is what stops the recorder working.
+
+  var liveEl = document.getElementById("live");
+  var liveImg = document.getElementById("liveImg");
+  var liveMsg = document.getElementById("liveMsg");
+  var liveBadge = document.getElementById("liveBadge");
+  var liveGrid = document.getElementById("liveGrid");
+  var liveGridToggle = document.getElementById("liveGridToggle");
+  var liveRun = 0;
+  var liveSeq = 0;
+  var liveUrl = null;
+
+  function liveMessage(text) {
+    liveMsg.textContent = text || "";
+    liveMsg.hidden = !text;
+    liveBadge.classList.toggle("stale", !!text);
+    if (text) { liveImg.style.opacity = liveUrl ? "0.35" : "0"; }
+  }
+
+  function showFrame(blob) {
+    var next = URL.createObjectURL(blob);
+    var previous = liveUrl;
+    liveUrl = next;
+    liveImg.src = next;
+    liveImg.style.opacity = "1";
+    if (previous) { setTimeout(function () { URL.revokeObjectURL(previous); }, 1000); }
+    liveMessage("");
+  }
+
+  function livePoll(run) {
+    if (run !== liveRun) { return; }
+    fetch("/api/live?after=" + liveSeq, { credentials: "same-origin", cache: "no-store" })
+      .then(function (response) {
+        if (response.status === 401) { throw new Error("unauthorized"); }
+        if (response.status === 204) {
+          liveMessage(response.headers.get("X-Camera") === "off"
+            ? "The recorder's camera is off. Open MTB Analyzer on the recording phone " +
+              "and keep its screen on to see the live view."
+            : "Waiting for the camera…");
+          return null;
+        }
+        if (!response.ok) { throw new Error("http " + response.status); }
+        liveSeq = Number(response.headers.get("X-Frame-Seq")) || liveSeq;
+        return response.blob();
+      })
+      .then(function (blob) {
+        if (run !== liveRun) { return; }
+        if (blob) { showFrame(blob); }
+        livePoll(run);
+      })
+      .catch(function (error) {
+        if (run !== liveRun) { return; }
+        if (error && error.message === "unauthorized") {
+          liveMessage("This link expired. Scan the code on the recorder again.");
+          return;
+        }
+        liveMessage("Can't reach the recorder. Still on its Wi-Fi?");
+        setTimeout(function () { livePoll(run); }, 1500);
+      });
+  }
+
+  function openLive() {
+    stopPolling();
+    liveEl.hidden = false;
+    liveMessage("Connecting to the camera…");
+    liveRun++;
+    livePoll(liveRun);
+  }
+
+  function closeLive() {
+    liveRun++;
+    liveEl.hidden = true;
+    liveImg.removeAttribute("src");
+    if (liveUrl) { URL.revokeObjectURL(liveUrl); liveUrl = null; }
+    startPolling();
+    refresh(true);
+  }
+
+  document.getElementById("liveOpen").addEventListener("click", openLive);
+  document.getElementById("liveClose").addEventListener("click", closeLive);
+  liveGridToggle.addEventListener("click", function () {
+    var on = liveGrid.hidden;
+    liveGrid.hidden = !on;
+    liveGridToggle.setAttribute("aria-pressed", on ? "true" : "false");
+  });
+
   document.getElementById("close").addEventListener("click", close);
   document.getElementById("retry").addEventListener("click", function () { refresh(); });
 
   document.addEventListener("visibilitychange", function () {
-    if (document.hidden) { stopPolling(); }
-    else if (playerEl.hidden) { startPolling(); refresh(true); }
+    if (document.hidden) {
+      stopPolling();
+      liveRun++; // let the recorder stop encoding while this tab is in the background
+    } else if (!liveEl.hidden) {
+      liveRun++;
+      livePoll(liveRun);
+    } else if (playerEl.hidden) { startPolling(); refresh(true); }
   });
 
   window.addEventListener("keydown", function (event) {
-    if (event.key === "Escape" && !playerEl.hidden) { close(); }
+    if (event.key === "Escape" && !liveEl.hidden) { closeLive(); }
+    else if (event.key === "Escape" && !playerEl.hidden) { close(); }
   });
 
   refresh().then(startPolling);

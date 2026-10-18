@@ -12,7 +12,7 @@ import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * The read-only viewer API. Five endpoints, no writes — deleting and importing stay on the
+ * The read-only viewer API. Six endpoints, no writes — deleting and importing stay on the
  * recorder, which keeps the whole surface safe to expose on a shared hotspot.
  */
 class ViewerLinkRoutes(
@@ -20,7 +20,8 @@ class ViewerLinkRoutes(
     private val catalog: ClipCatalog,
     private val thumbnails: ClipThumbnails,
     private val token: String,
-    private val allowedHosts: Set<String>
+    private val allowedHosts: Set<String>,
+    private val live: LiveFrameHub = LiveFrameHub.shared
 ) {
 
     companion object {
@@ -30,6 +31,7 @@ class ViewerLinkRoutes(
         private const val API_VERSION = 1
         private const val PAGE_ASSET = "viewer/index.html"
         private const val COPY_BUFFER = 64 * 1024
+        private const val LIVE_WAIT_MS = 2_500L
     }
 
     private val metaCache = ConcurrentHashMap<Long, String>()
@@ -48,6 +50,7 @@ class ViewerLinkRoutes(
             path == "/favicon.ico" -> HttpResponse.empty(404)
             path == "/api/health" -> health()
             path == "/api/clips" -> authorized(request) { clips(request) }
+            path == "/api/live" -> authorized(request) { liveFrame(request) }
             path.startsWith("/api/clips/") -> authorized(request) { clipRoute(request, path) }
             else -> HttpResponse.error(404, "Not found")
         }
@@ -108,6 +111,40 @@ class ViewerLinkRoutes(
         val since = request.query["since"]?.toLongOrNull()
         return HttpResponse.json(
             200, catalog.listJson(since), mapOf("Cache-Control" to "no-store")
+        )
+    }
+
+    /**
+     * One live-view frame, long-polled: `after` names the frame the viewer already has and
+     * the request waits for a newer one. 204 means none arrived in time, with `X-Camera`
+     * saying whether that is because the recorder's capture screen is not open.
+     */
+    private fun liveFrame(request: HttpRequest): HttpResponse {
+        val after = request.query["after"]?.toLongOrNull() ?: 0L
+        val frame = try {
+            live.await(after, LIVE_WAIT_MS)
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt() // the server is stopping
+            return HttpResponse.error(503, "Stopping")
+        }
+        if (frame == null) {
+            return HttpResponse.empty(
+                204,
+                mapOf(
+                    "Cache-Control" to "no-store",
+                    "X-Camera" to if (live.isCameraLive()) "on" else "off"
+                )
+            )
+        }
+        return HttpResponse.bytes(
+            200,
+            "image/jpeg",
+            frame.jpeg,
+            mapOf(
+                "Cache-Control" to "no-store",
+                "X-Camera" to "on",
+                "X-Frame-Seq" to frame.seq.toString()
+            )
         )
     }
 
