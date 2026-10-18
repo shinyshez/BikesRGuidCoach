@@ -132,6 +132,11 @@
             android:title="Zoom Test"
             android:summary="Exercise the pinch-to-zoom view on a still image" />
 
+        <Preference
+            android:key="doppler_gate"
+            android:title="Doppler Gate Test"
+            android:summary="Time a pass from the Doppler shift of an 18 kHz tone played by another phone" />
+
     </PreferenceCategory>
 
     <PreferenceCategory android:title="Storage"
