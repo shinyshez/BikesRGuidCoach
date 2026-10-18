@@ -138,7 +138,7 @@ class DopplerGateActivity : AppCompatActivity() {
 
             override fun onPass(pass: DopplerGateDetector.Pass) {
                 trace.addPass(pass.timeSec)
-                runOnUiThread { onPass(pass) }
+                runOnUiThread { showPass(pass) }
             }
         }
 
@@ -186,7 +186,7 @@ class DopplerGateActivity : AppCompatActivity() {
         }
     }
 
-    private fun onPass(pass: DopplerGateDetector.Pass) {
+    private fun showPass(pass: DopplerGateDetector.Pass) {
         passCount++
         val split = lastPassSec?.let { "  split %.3f s".format(pass.timeSec - it) } ?: ""
         lastPassSec = pass.timeSec
