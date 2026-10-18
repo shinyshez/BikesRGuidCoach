@@ -59,6 +59,10 @@ class VideoPlayerView @JvmOverloads constructor(
     private lateinit var topBar: View
     private lateinit var bottomControlsBar: View
     private lateinit var doneDrawingButton: Button
+    private lateinit var passMarksView: com.mtbanalyzer.doppler.PassMarksView
+    private lateinit var gateJumpButton: TextView
+    /** Where the rider passed the timing gate, ms into the clip; empty when not marked. */
+    private var gateMarks: List<Int> = emptyList()
     private lateinit var railDoneButton: ImageButton
     private lateinit var poseToggleButton: ImageButton
     private lateinit var poseToggleContainer: View
@@ -167,6 +171,9 @@ class VideoPlayerView @JvmOverloads constructor(
         topBar = findViewById(R.id.topBar)
         bottomControlsBar = findViewById(R.id.bottomControlsBar)
         doneDrawingButton = findViewById(R.id.doneDrawingButton)
+        passMarksView = findViewById(R.id.passMarks)
+        passMarksView.bind(seekBar)
+        gateJumpButton = findViewById(R.id.gateJumpButton)
         railDoneButton = findViewById(R.id.railDoneButton)
         poseToggleButton = findViewById(R.id.poseToggleButton)
         poseToggleContainer = findViewById(R.id.poseToggleContainer)
@@ -208,6 +215,7 @@ class VideoPlayerView @JvmOverloads constructor(
                     Player.STATE_READY -> {
                         videoDuration = exoPlayer?.duration ?: 0L
                         seekBar.max = videoDuration.toInt()
+                        passMarksView.invalidate()
                         progressLine.max = videoDuration.toInt()
                         loadingIndicator.visibility = View.GONE
                         
@@ -432,6 +440,7 @@ class VideoPlayerView @JvmOverloads constructor(
         }
         
         railDoneButton.setOnClickListener { exitDrawingMode() }
+        gateJumpButton.setOnClickListener { jumpToNextGateMark() }
         doneDrawingButton.setOnClickListener {
             if (isDrawingMode) toggleDrawingMode()
         }
@@ -581,6 +590,7 @@ class VideoPlayerView @JvmOverloads constructor(
         drawingToggleButton.visibility = if (isDrawingMode) View.GONE else View.VISIBLE
         playPauseButton.visibility = if (isDrawingMode) View.GONE else View.VISIBLE
         doneDrawingButton.visibility = if (isDrawingMode) View.VISIBLE else View.GONE
+        updateGateButton()
         updateTitleVisibility()
         drawingOverlay.setDrawingEnabled(isDrawingMode)
         if (isDrawingMode) {
@@ -1187,6 +1197,29 @@ class VideoPlayerView @JvmOverloads constructor(
      * Embedded mode is for hosts that provide their own transport (video comparison):
      * no bottom bar or progress line, and the corner controls never auto-hide.
      */
+    /** Marks where the rider passed the timing gate (ms into the clip) and offers a jump to it. */
+    fun setPassMarks(marksMs: List<Int>) {
+        gateMarks = marksMs.sorted()
+        passMarksView.setMarks(gateMarks)
+        updateGateButton()
+    }
+
+    fun getPassMarks(): List<Int> = gateMarks
+
+    private fun updateGateButton() {
+        gateJumpButton.visibility = if (gateMarks.isEmpty() || isDrawingMode) View.GONE else View.VISIBLE
+    }
+
+    /** Pauses on the next gate pass after the current frame, wrapping to the first. */
+    private fun jumpToNextGateMark() {
+        if (gateMarks.isEmpty()) return
+        if (isPlaying) pause()
+        val now = getCurrentPosition() + (frameDurationMs / 2).toInt()
+        val target = gateMarks.firstOrNull { it > now } ?: gateMarks.first()
+        seekTo(target.coerceAtMost(getDuration().takeIf { it > 0 } ?: target))
+        showControls()
+    }
+
     fun setEmbedded(embedded: Boolean) {
         isEmbedded = embedded
         bottomControlsBar.visibility = if (embedded) View.GONE else View.VISIBLE

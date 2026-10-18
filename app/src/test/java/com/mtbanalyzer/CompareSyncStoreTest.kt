@@ -27,6 +27,14 @@ class CompareSyncStoreTest {
     }
 
     @Test
+    fun gateOffset_isClip2PassMinusClip1Pass() {
+        assertEquals(1200, CompareSyncStore.gateOffsetMs(listOf(3000), listOf(4200)))
+        assertEquals(-800, CompareSyncStore.gateOffsetMs(listOf(5000, 7000), listOf(4200)))
+        assertEquals(null, CompareSyncStore.gateOffsetMs(emptyList(), listOf(4200)))
+        assertEquals(null, CompareSyncStore.gateOffsetMs(listOf(3000), emptyList()))
+    }
+
+    @Test
     fun default_isLockedAtZero() {
         assertEquals(CompareSyncStore.SyncState(locked = true, offsetMs = 0), CompareSyncStore.DEFAULT)
     }

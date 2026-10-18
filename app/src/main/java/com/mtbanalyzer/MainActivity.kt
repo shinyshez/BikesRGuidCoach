@@ -56,6 +56,7 @@ class MainActivity : AppCompatActivity(),
     private lateinit var recentClipsList: RecyclerView
     private lateinit var clipCountText: TextView
     private lateinit var bottomGradient: View
+    private lateinit var captureGate: com.mtbanalyzer.doppler.CaptureGate
     private lateinit var recentClipsAdapter: RecentClipsAdapter
     // Clip ids on screen when it opened; anything newer gets a NEW tag in the strip
     private var knownClipIds: Set<Long>? = null
@@ -102,6 +103,9 @@ class MainActivity : AppCompatActivity(),
             recentClipsList = findViewById(R.id.recentClipsList)
             clipCountText = findViewById(R.id.clipCountText)
             bottomGradient = findViewById(R.id.bottomGradient)
+            captureGate = com.mtbanalyzer.doppler.CaptureGate(
+                this, findViewById(R.id.gateIndicator), findViewById(R.id.gateDot), findViewById(R.id.gateText)
+            )
             
             // Initialize navigation buttons
             findViewById<android.widget.ImageButton>(R.id.settingsButton).setOnClickListener {
@@ -303,6 +307,10 @@ class MainActivity : AppCompatActivity(),
         }
     }
 
+    override fun onClipTimeline(uri: String, startNanos: Long, endNanos: Long) {
+        runOnUiThread { captureGate.onClipTimeline(uri, startNanos, endNanos) }
+    }
+
     override fun onRecordingProgress(elapsedMs: Long) {
         runOnUiThread {
             uiStateManager.updateRecordingProgress(elapsedMs)
@@ -426,10 +434,19 @@ class MainActivity : AppCompatActivity(),
 
     override fun onResume() {
         super.onResume()
+        if (::captureGate.isInitialized && ::settingsManager.isInitialized) {
+            captureGate.enabled = settingsManager.isGateListenEnabled()
+            captureGate.resume()
+        }
         // Pick up clips imported or deleted while away
         if (::recentClipsAdapter.isInitialized) loadRecentClips()
     }
     
+    override fun onPause() {
+        super.onPause()
+        if (::captureGate.isInitialized) captureGate.pause()
+    }
+
     // SharedPreferences.OnSharedPreferenceChangeListener implementation
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
         when (key) {

@@ -1,12 +1,7 @@
 package com.mtbanalyzer.doppler
 
 import android.Manifest
-import android.annotation.SuppressLint
 import android.content.pm.PackageManager
-import android.media.AudioFormat
-import android.media.AudioManager
-import android.media.AudioRecord
-import android.media.MediaRecorder
 import android.os.Bundle
 import android.util.Log
 import android.view.HapticFeedbackConstants
@@ -18,7 +13,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.mtbanalyzer.R
-import kotlin.math.max
 
 /**
  * Developer experiment: is a Doppler zero crossing a usable timing gate?
@@ -31,7 +25,6 @@ class DopplerGateActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "DopplerGate"
-        private const val SAMPLE_RATE = 48_000
         private const val MAX_LOG_LINES = 20
     }
 
@@ -44,9 +37,24 @@ class DopplerGateActivity : AppCompatActivity() {
     private lateinit var toneButton: Button
 
     private val tone = TonePlayer()
-    @Volatile private var listening = false
-    private var audioThread: Thread? = null
-    private var sourceName = ""
+    private val listening: Boolean get() = listener.isRunning
+    private val listener by lazy {
+        DopplerListener(this, object : DopplerListener.Callback {
+            override fun onFrame(frame: DopplerGateDetector.Frame, baselineHz: Double) {
+                trace.addFrame(frame)
+                if (++frameCount % 10 == 0) runOnUiThread { showLive(frame, baselineHz) }
+            }
+
+            override fun onPass(pass: DopplerGateDetector.Pass, elapsedRealtimeNanos: Long) {
+                trace.addPass(pass.timeSec)
+                runOnUiThread { showPass(pass) }
+            }
+
+            override fun onError(message: String) {
+                runOnUiThread { stopListening(); statusText.text = message }
+            }
+        })
+    }
     private var frameCount = 0
     private var lastPassSec: Double? = null
     private var passCount = 0
@@ -94,83 +102,15 @@ class DopplerGateActivity : AppCompatActivity() {
         refreshButtons()
     }
 
-    @SuppressLint("MissingPermission") // checked by the caller
     private fun startListening() {
-        val minBuf = AudioRecord.getMinBufferSize(
-            SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT
-        )
-        if (minBuf <= 0) {
-            statusText.text = "This device can't record at $SAMPLE_RATE Hz"
-            return
+        if (listener.start()) {
+            statusText.text = "Listening for 18 kHz…"
+            refreshButtons()
         }
-        // Noise suppression and AGC can eat a steady 18 kHz tone; ask for the rawest input.
-        val audioManager = getSystemService(AUDIO_SERVICE) as AudioManager
-        val unprocessed = audioManager.getProperty(
-            AudioManager.PROPERTY_SUPPORT_AUDIO_SOURCE_UNPROCESSED
-        ) == "true"
-        val source = if (unprocessed) MediaRecorder.AudioSource.UNPROCESSED
-        else MediaRecorder.AudioSource.VOICE_RECOGNITION
-        sourceName = if (unprocessed) "unprocessed mic" else "voice-recognition mic"
-
-        val record = try {
-            AudioRecord(
-                source, SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT,
-                max(minBuf, SAMPLE_RATE / 5 * 2)
-            )
-        } catch (e: Exception) {
-            Log.e(TAG, "AudioRecord($sourceName) failed", e)
-            statusText.text = "Couldn't open the $sourceName: $e"
-            return
-        }
-        if (record.state != AudioRecord.STATE_INITIALIZED) {
-            record.release()
-            statusText.text = "Couldn't open the $sourceName"
-            return
-        }
-
-        val detector = DopplerGateDetector(SAMPLE_RATE)
-        trace.thresholdHz = detector.thresholdHz
-        detector.listener = object : DopplerGateDetector.Listener {
-            override fun onFrame(frame: DopplerGateDetector.Frame) {
-                trace.addFrame(frame)
-                if (++frameCount % 10 == 0) runOnUiThread { showLive(frame, detector.baselineHz) }
-            }
-
-            override fun onPass(pass: DopplerGateDetector.Pass) {
-                trace.addPass(pass.timeSec)
-                runOnUiThread { showPass(pass) }
-            }
-        }
-
-        Log.i(TAG, "Listening: $sourceName, ${SAMPLE_RATE} Hz, buffer ${max(minBuf, SAMPLE_RATE / 5 * 2)} bytes")
-        listening = true
-        audioThread = Thread({
-            val buf = ShortArray(SAMPLE_RATE / 50)
-            try {
-                record.startRecording()
-                while (listening) {
-                    val n = record.read(buf, 0, buf.size)
-                    if (n > 0) detector.process(buf, 0, n)
-                    else if (n < 0) { Log.w(TAG, "AudioRecord.read returned $n"); break }
-                }
-            } catch (e: Throwable) {
-                // Anything uncaught here kills the whole app; show it instead.
-                Log.e(TAG, "Listening failed", e)
-                runOnUiThread { stopListening(); statusText.text = "Listening failed: $e" }
-            } finally {
-                runCatching { record.stop() }
-                record.release()
-            }
-        }, "doppler-gate").apply { start() }
-
-        statusText.text = "Listening for 18 kHz…"
-        refreshButtons()
     }
 
     private fun stopListening() {
-        listening = false
-        audioThread?.join(500)
-        audioThread = null
+        listener.stop()
         if (!isFinishing) statusText.text = "Not listening"
         refreshButtons()
     }
@@ -179,10 +119,10 @@ class DopplerGateActivity : AppCompatActivity() {
         if (!listening) return
         liveText.text = if (frame.heard) {
             "Shift %+.1f Hz · SNR %.0f dB · tone at %.1f Hz\n%s".format(
-                frame.shiftHz, frame.snrDb, baselineHz, sourceName
+                frame.shiftHz, frame.snrDb, baselineHz, listener.sourceName
             )
         } else {
-            "No tone heard (SNR %.0f dB)\n%s".format(frame.snrDb, sourceName)
+            "No tone heard (SNR %.0f dB)\n%s".format(frame.snrDb, listener.sourceName)
         }
     }
 

@@ -99,9 +99,11 @@ as the final check on a PR; the local loop is for iteration.
 3. Grant camera and audio recording permissions when prompted
 
 ### Crash reports without a cable
-`CrashLog` (installed by `MtbApplication`) writes the stack trace and the app's last 400
-logcat lines to `filesDir/last_crash.txt` as the process dies; the next launch of
-`MainActivity` offers Share / Copy so a tester can paste it into a chat or issue.
+`CrashLog` (installed by `MtbApplication`) writes the stack trace and the dying process's
+recent log lines to `filesDir/last_crash.txt`; the next launch of `MainActivity` offers
+Share / Copy so a tester can paste it into a chat or issue. The report is capped (60k chars,
+120 trace lines) because the clipboard and share intents go through Binder, which refuses
+about 1 MB — an unbounded StackOverflowError report once crashed the Copy button.
 
 ### Testing a Single Test
 ```bash
@@ -220,11 +222,31 @@ consent dialog (`MediaStore.createDeleteRequest`).
 - **Remote Control**: Enable Bluetooth remote control via volume buttons
 - **Viewer Link**: Serve this phone's clips to a second phone over the local network
 - **Performance Overlay**: Show detection performance metrics
+- **Timing Gate › Listen for gate beacon** (off by default): see Timing Gate below
 - **Doppler Gate Test** (Developer): experiment for a cheap audio timing gate. One phone plays
   an 18 kHz tone, the other listens; carrying one past the other flashes the screen at the
   Doppler zero crossing and logs time, split and approach speed. `DopplerGateDetector` is pure
   Kotlin (Goertzel over the band, line fit at the crossing) and unit-tested on synthesized passes
 - **Orientation Support**: Settings screen adapts to device orientation
+
+### Timing Gate
+
+The rider carries an 18 kHz beacon (a phone on the Doppler Gate Test screen, or a crystal
+beacon); the recorder listens and marks, in each clip, the frame where the rider passed it.
+
+- **Capture screen**: with the setting on, a `Gate` pill top-left shows whether the tone is
+  heard (green) or not (grey) and pops on each pass. Listening runs only while the screen is up
+- **How a pass lands in a clip**: `DopplerListener` places each pass on the boot clock with
+  `AudioRecord.getTimestamp(TIMEBASE_BOOTTIME)`; `RecordingManager` reports the clip's span on
+  the same clock (`onClipTimeline`). CameraX doesn't expose the first frame's time, so it is
+  estimated as the smallest `Status` arrival time minus recorded duration (logged as "first
+  frame N ms after the Start event"). `PassMarker` (pure, unit-tested) matches the two in
+  either order — a pass is confirmed up to ~250 ms after its crossing, which can be after the
+  clip stopped — and `PassMarkStore` keeps ms offsets keyed on `ClipRef.key`
+- **Playback**: green ticks on the seekbar and a **Gate** button that pauses on the pass frame
+- **Compare**: a pair never compared before where both clips have a pass opens locked with the
+  offset that lines the passes up, 1.5s before the pass. Anything already saved for the pair wins
+- Marks live on the recorder only; the viewer app doesn't see them yet
 
 ### Remote Control (Bluetooth)
 

@@ -8,6 +8,7 @@ import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.mtbanalyzer.clips.ClipRef
+import com.mtbanalyzer.doppler.PassMarkStore
 import com.mtbanalyzer.viewer.RemotePlayback
 
 /**
@@ -72,6 +73,10 @@ class VideoPlaybackActivity : AppCompatActivity() {
             }
         } else {
             videoPlayerView.setVideo(videoUri!!)
+            // Gate passes are recorded against clips on this phone only
+            videoUri.lastPathSegment?.toLongOrNull()?.let { id ->
+                videoPlayerView.setPassMarks(PassMarkStore(this).load(ClipRef.Local(id).key))
+            }
         }
 
         videoPlayerView.setOnVideoLoadedListener { duration ->
