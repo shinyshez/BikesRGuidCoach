@@ -82,6 +82,8 @@ class MainActivity : AppCompatActivity(),
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        CrashLog.offerLastCrash(this)
+
         try {
             setContentView(R.layout.activity_main)
 

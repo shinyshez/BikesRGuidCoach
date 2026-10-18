@@ -32,6 +32,7 @@
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
 
     <application
+        android:name=".MtbApplication"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -97,6 +98,13 @@
             android:name=".ZoomTestActivity"
             android:exported="false"
             android:parentActivityName=".MainActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:screenOrientation="sensor" />
+
+        <activity
+            android:name=".doppler.DopplerGateActivity"
+            android:exported="false"
+            android:parentActivityName=".SettingsActivity"
             android:configChanges="orientation|screenSize|keyboardHidden"
             android:screenOrientation="sensor" />
 

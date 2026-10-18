@@ -98,6 +98,11 @@ as the final check on a PR; the local loop is for iteration.
 2. Run `./gradlew installDebug` to install the app
 3. Grant camera and audio recording permissions when prompted
 
+### Crash reports without a cable
+`CrashLog` (installed by `MtbApplication`) writes the stack trace and the app's last 400
+logcat lines to `filesDir/last_crash.txt` as the process dies; the next launch of
+`MainActivity` offers Share / Copy so a tester can paste it into a chat or issue.
+
 ### Testing a Single Test
 ```bash
 # Run specific unit test class
@@ -215,6 +220,10 @@ consent dialog (`MediaStore.createDeleteRequest`).
 - **Remote Control**: Enable Bluetooth remote control via volume buttons
 - **Viewer Link**: Serve this phone's clips to a second phone over the local network
 - **Performance Overlay**: Show detection performance metrics
+- **Doppler Gate Test** (Developer): experiment for a cheap audio timing gate. One phone plays
+  an 18 kHz tone, the other listens; carrying one past the other flashes the screen at the
+  Doppler zero crossing and logs time, split and approach speed. `DopplerGateDetector` is pure
+  Kotlin (Goertzel over the band, line fit at the crossing) and unit-tested on synthesized passes
 - **Orientation Support**: Settings screen adapts to device orientation
 
 ### Remote Control (Bluetooth)
