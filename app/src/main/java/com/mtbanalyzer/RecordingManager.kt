@@ -37,10 +37,21 @@ class RecordingManager(
         fun onRecordingStarted()
         fun onRecordingFinished(success: Boolean, uri: String?, error: String?)
         fun onRecordingProgress(elapsedMs: Long)
+        /**
+         * The saved clip's span on the boot clock ([android.os.SystemClock.elapsedRealtimeNanos]),
+         * the clock the camera and the gate listener use, so events can be placed in the clip.
+         */
+        fun onClipTimeline(uri: String, startNanos: Long, endNanos: Long) {}
     }
 
     private var recording: Recording? = null
     private var recordingStartTime = 0L
+
+    // When the first frame was captured, on the boot clock. CameraX doesn't report it, so it is
+    // estimated from Status events: arrival time minus the media recorded so far. Delivery only
+    // ever lags, so the smallest estimate is the best; the Start event is the fallback.
+    private var startEventNanos = 0L
+    private var firstFrameNanos = Long.MAX_VALUE
     private val recordingLock = Object()
 
     @Volatile
@@ -97,8 +108,16 @@ class RecordingManager(
 
     private fun handleRecordingEvent(recordEvent: VideoRecordEvent, callback: RecordingCallback) {
         when (recordEvent) {
+            is VideoRecordEvent.Status -> {
+                val recorded = recordEvent.recordingStats.recordedDurationNanos
+                if (recorded > 0) {
+                    firstFrameNanos = minOf(firstFrameNanos, android.os.SystemClock.elapsedRealtimeNanos() - recorded)
+                }
+            }
             is VideoRecordEvent.Start -> {
                 recordingStartTime = System.currentTimeMillis()
+                startEventNanos = android.os.SystemClock.elapsedRealtimeNanos()
+                firstFrameNanos = Long.MAX_VALUE
                 callback.onRecordingStarted()
                 Log.d(TAG, "Recording started")
                 
@@ -118,6 +137,7 @@ class RecordingManager(
                         recordingState = RecordingState.SAVING
                     }
                     callback.onRecordingFinished(true, recordEvent.outputResults.outputUri.toString(), null)
+                    reportTimeline(recordEvent, callback)
                     
                     // Haptic feedback on successful recording
                     if (settingsManager.isHapticFeedbackEnabled()) {
@@ -164,6 +184,14 @@ class RecordingManager(
                 }
             }
         }
+    }
+
+    private fun reportTimeline(event: VideoRecordEvent.Finalize, callback: RecordingCallback) {
+        val start = if (firstFrameNanos != Long.MAX_VALUE) firstFrameNanos else startEventNanos
+        if (start == 0L) return
+        Log.d(TAG, "Clip timeline: first frame ${(start - startEventNanos) / 1_000_000} ms after the Start event")
+        val end = start + event.recordingStats.recordedDurationNanos
+        callback.onClipTimeline(event.outputResults.outputUri.toString(), start, end)
     }
 
     fun stopRecording() {

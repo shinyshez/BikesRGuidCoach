@@ -62,6 +62,17 @@
 
     </PreferenceCategory>
 
+    <PreferenceCategory android:title="Timing Gate"
+        android:order="250">
+
+        <SwitchPreferenceCompat
+            android:key="gate_listen_enabled"
+            android:title="Listen for gate beacon"
+            android:summary="Mark the frame where the rider passes an 18 kHz beacon in each clip. Uses the microphone while the capture screen is open"
+            android:defaultValue="false" />
+
+    </PreferenceCategory>
+
     <PreferenceCategory android:title="Feedback"
         android:order="300">
 

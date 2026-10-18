@@ -12,6 +12,7 @@ class SettingsManager(context: Context) {
         private const val KEY_DETECTION_SENSITIVITY = "detection_sensitivity"
         private const val KEY_POST_RIDER_DELAY = "post_rider_delay"
         private const val KEY_HAPTIC_FEEDBACK = "haptic_feedback"
+        private const val KEY_GATE_LISTEN = "gate_listen_enabled"
         private const val KEY_SOUND_FEEDBACK = "sound_feedback"
         private const val KEY_SHOW_POSE_OVERLAY = "show_pose_overlay"
         private const val KEY_DETECTOR_TYPE = "detector_type"
@@ -65,6 +66,9 @@ class SettingsManager(context: Context) {
         return getPostRiderDelay() * 1000L
     }
     
+    /** Listen for the 18 kHz gate beacon on the capture screen and mark passes in clips. */
+    fun isGateListenEnabled(): Boolean = sharedPreferences.getBoolean(KEY_GATE_LISTEN, false)
+
     fun isHapticFeedbackEnabled(): Boolean {
         return sharedPreferences.getBoolean(KEY_HAPTIC_FEEDBACK, DEFAULT_HAPTIC_FEEDBACK)
     }

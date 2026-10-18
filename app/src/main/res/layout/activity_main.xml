@@ -82,6 +82,43 @@
 
     </LinearLayout>
 
+    <!-- Timing gate: shown while listening for the beacon. Grey = not heard, green = heard,
+         flashes on a pass -->
+    <LinearLayout
+        android:id="@+id/gateIndicator"
+        android:layout_width="wrap_content"
+        android:layout_height="28dp"
+        android:layout_marginStart="12dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="10dp"
+        android:paddingEnd="10dp"
+        android:background="@drawable/badge_background"
+        android:contentDescription="Timing gate"
+        android:visibility="gone"
+        app:layout_constraintTop_toTopOf="@id/modeToggle"
+        app:layout_constraintBottom_toBottomOf="@id/modeToggle"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <View
+            android:id="@+id/gateDot"
+            android:layout_width="8dp"
+            android:layout_height="8dp"
+            android:layout_marginEnd="6dp"
+            android:background="@drawable/circle_indicator"
+            android:backgroundTint="#888888" />
+
+        <TextView
+            android:id="@+id/gateText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Gate"
+            android:textColor="@android:color/white"
+            android:textSize="12sp"
+            android:singleLine="true" />
+
+    </LinearLayout>
+
     <!-- One status chip under the mode pill: watching / rider in frame / REC 0:03 / saved -->
     <LinearLayout
         android:id="@+id/statusChip"

@@ -15,6 +15,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import com.mtbanalyzer.doppler.PassMarkStore
 
 /**
  * Side-by-side comparison of two clips driven by one shared transport.
@@ -34,6 +35,8 @@ class VideoComparisonActivity : AppCompatActivity() {
         /** [com.mtbanalyzer.clips.ClipRef.key] of each clip, which keys the remembered sync. */
         const val EXTRA_VIDEO1_KEY = "video1_key"
         const val EXTRA_VIDEO2_KEY = "video2_key"
+        /** How far before the gate pass a gate-aligned pair opens. */
+        private const val GATE_LEAD_IN_MS = 1500
 
         private const val UI_UPDATE_MS = 100L
         private const val SYNC_CHECK_MS = 300L
@@ -68,6 +71,8 @@ class VideoComparisonActivity : AppCompatActivity() {
     private var activePlayer = 1
     private var loadedCount = 0
     private var initialSyncApplied = false
+    /** Where clip 1 opens when a new pair was lined up at the timing gate; null otherwise. */
+    private var gateLeadInMs: Int? = null
     private var isUserSeeking = false
 
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -144,7 +149,24 @@ class VideoComparisonActivity : AppCompatActivity() {
         positionOffset = saved.offsetMs
         Log.d(TAG, "Restored sync for $pairId1|$pairId2: locked=$isLocked offset=${positionOffset}ms")
 
+        // A pair never compared before, both with a gate pass: line them up at the pass and
+        // open just before it. Anything the user has set for the pair wins.
+        val passMarks = PassMarkStore(this)
+        val marks1 = passMarks.load(pairId1)
+        val marks2 = passMarks.load(pairId2)
+        val gateOffset = CompareSyncStore.gateOffsetMs(marks1, marks2)
+        if (gateOffset != null && !syncStore.has(pairId1, pairId2)) {
+            isLocked = true
+            positionOffset = gateOffset
+            gateLeadInMs = (marks1.first() - GATE_LEAD_IN_MS).coerceAtLeast(0)
+            syncStore.save(pairId1, pairId2, CompareSyncStore.SyncState(isLocked, positionOffset))
+            Log.d(TAG, "Aligned $pairId1|$pairId2 at the gate: offset=${positionOffset}ms")
+            Toast.makeText(this, "Lined up at the gate", Toast.LENGTH_SHORT).show()
+        }
+
         setupVideoPlayers(uri1, uri2)
+        videoPlayer1.setPassMarks(marks1)
+        videoPlayer2.setPassMarks(marks2)
         updateLockUi()
         updateActivePanelUi()
     }
@@ -199,6 +221,14 @@ class VideoComparisonActivity : AppCompatActivity() {
         initialSyncApplied = true
         sharedSeekBar.max = referencePlayer().getDuration()
         updateTransportUi()
+        gateLeadInMs?.let { start1 ->
+            mainHandler.post {
+                videoPlayer1.seekTo(start1)
+                seekWithinDuration(videoPlayer2, start1 + positionOffset)
+                updateTransportUi()
+            }
+            return
+        }
         // Both clips ready: apply the restored offset so a locked pair opens in sync. Seek on
         // the next main-loop pass rather than inside the player's READY callback, so the
         // players' own BUFFERING -> READY handling (and their loading spinner) stays in step.
