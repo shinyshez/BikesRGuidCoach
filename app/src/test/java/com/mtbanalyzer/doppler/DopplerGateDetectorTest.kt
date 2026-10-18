@@ -99,8 +99,31 @@ class DopplerGateDetectorTest {
 
     @Test
     fun stationaryToneOffByClockSkew_neverPasses() {
+        val rnd = Random(2)
         val pcm = ShortArray(rate * 6) { i ->
-            val s = 0.05 * sin(2 * PI * 18_004.0 * i / rate) + 0.01 * Random(i.toLong()).nextGaussian()
+            val s = 0.05 * sin(2 * PI * 18_004.0 * i / rate) + 0.01 * rnd.nextGaussian()
+            (s * 32767).toInt().toShort()
+        }
+        assertTrue(run(pcm).isEmpty())
+    }
+
+    /**
+     * Real noise lets a stray frame through now and then. A stray "high" and a stray "low"
+     * well over a second apart, with nothing heard between, used to throw from maxOf on the
+     * audio thread and take the app down. It must not crash, and it is not a pass.
+     */
+    @Test
+    fun strayBlipsFarApart_doNotCrashOrPass() {
+        val rnd = Random(3)
+        val pcm = ShortArray(rate * 4) { i ->
+            val t = i.toDouble() / rate
+            val hz = when {
+                t in 1.0..1.06 -> 18_300.0
+                t in 2.6..2.66 -> 17_960.0
+                else -> 0.0
+            }
+            val s = (if (hz > 0) 0.2 * sin(2 * PI * hz * t) else 0.0) +
+                0.001 * rnd.nextGaussian()
             (s * 32767).toInt().toShort()
         }
         assertTrue(run(pcm).isEmpty())

@@ -112,13 +112,19 @@ class DopplerGateActivity : AppCompatActivity() {
         else MediaRecorder.AudioSource.VOICE_RECOGNITION
         sourceName = if (unprocessed) "unprocessed mic" else "voice-recognition mic"
 
-        val record = AudioRecord(
-            source, SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT,
-            max(minBuf, SAMPLE_RATE / 5 * 2)
-        )
+        val record = try {
+            AudioRecord(
+                source, SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT,
+                max(minBuf, SAMPLE_RATE / 5 * 2)
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "AudioRecord($sourceName) failed", e)
+            statusText.text = "Couldn't open the $sourceName: $e"
+            return
+        }
         if (record.state != AudioRecord.STATE_INITIALIZED) {
             record.release()
-            statusText.text = "Couldn't open the microphone"
+            statusText.text = "Couldn't open the $sourceName"
             return
         }
 
@@ -146,8 +152,12 @@ class DopplerGateActivity : AppCompatActivity() {
                     if (n > 0) detector.process(buf, 0, n)
                     else if (n < 0) { Log.w(TAG, "AudioRecord.read returned $n"); break }
                 }
+            } catch (e: Exception) {
+                // An uncaught exception here kills the whole app; show it instead.
+                Log.e(TAG, "Listening failed", e)
+                runOnUiThread { stopListening(); statusText.text = "Listening failed: $e" }
             } finally {
-                record.stop()
+                runCatching { record.stop() }
                 record.release()
             }
         }, "doppler-gate").apply { start() }

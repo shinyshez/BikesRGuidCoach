@@ -98,6 +98,11 @@ as the final check on a PR; the local loop is for iteration.
 2. Run `./gradlew installDebug` to install the app
 3. Grant camera and audio recording permissions when prompted
 
+### Crash reports without a cable
+`CrashLog` (installed by `MtbApplication`) writes the stack trace and the app's last 400
+logcat lines to `filesDir/last_crash.txt` as the process dies; the next launch of
+`MainActivity` offers Share / Copy so a tester can paste it into a chat or issue.
+
 ### Testing a Single Test
 ```bash
 # Run specific unit test class

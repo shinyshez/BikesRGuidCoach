@@ -144,12 +144,17 @@ class DopplerGateDetector(
         if (cross < 0) return
 
         val p = heard[cross - 1]; val q = heard[cross]
+        // A real pass sweeps through zero while the tone is heard. A gap here means two
+        // unrelated frames (stray noise peaks, or the tone dropping out) either side of it.
+        if (q.timeSec - p.timeSec > MAX_CROSS_GAP_SEC) return
         val rough = p.timeSec + (q.timeSec - p.timeSec) * p.shiftHz / (p.shiftHz - q.shiftHz)
-        val timeSec = fitCrossing(heard.filter { abs(it.timeSec - rough) <= FIT_HALF_WIDTH_SEC }) ?: rough
+        val timeSec = fitCrossing(heard.filter { abs(it.timeSec - rough) <= FIT_HALF_WIDTH_SEC })
+            ?.takeIf { it in p.timeSec..q.timeSec }
+            ?: rough
 
         val approachHz = history
             .filter { it.heard && it.timeSec in (timeSec - 1.0)..timeSec }
-            .maxOf { it.shiftHz }
+            .maxOfOrNull { it.shiftHz } ?: p.shiftHz
         listener?.onPass(
             Pass(timeSec, frame.timeSec, approachHz, SPEED_OF_SOUND * approachHz / toneHz)
         )
@@ -178,6 +183,7 @@ class DopplerGateDetector(
         private const val HISTORY_SEC = 4.0
         private const val APPROACH_MEMORY_SEC = 3.0
         private const val FIT_HALF_WIDTH_SEC = 0.03
+        private const val MAX_CROSS_GAP_SEC = 0.1
         private const val BASELINE_GATE_HZ = 8.0
         private const val BASELINE_ALPHA = 0.02
     }
