@@ -142,6 +142,7 @@ class DopplerGateActivity : AppCompatActivity() {
             }
         }
 
+        Log.i(TAG, "Listening: $sourceName, ${SAMPLE_RATE} Hz, buffer ${max(minBuf, SAMPLE_RATE / 5 * 2)} bytes")
         listening = true
         audioThread = Thread({
             val buf = ShortArray(SAMPLE_RATE / 50)
@@ -152,8 +153,8 @@ class DopplerGateActivity : AppCompatActivity() {
                     if (n > 0) detector.process(buf, 0, n)
                     else if (n < 0) { Log.w(TAG, "AudioRecord.read returned $n"); break }
                 }
-            } catch (e: Exception) {
-                // An uncaught exception here kills the whole app; show it instead.
+            } catch (e: Throwable) {
+                // Anything uncaught here kills the whole app; show it instead.
                 Log.e(TAG, "Listening failed", e)
                 runOnUiThread { stopListening(); statusText.text = "Listening failed: $e" }
             } finally {
