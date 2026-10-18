@@ -37,6 +37,15 @@ class PassMarksView @JvmOverloads constructor(
         invalidate()
     }
 
+    /**
+     * Ask for nothing: a plain View given "at most" claims all of it, which in the seek row's
+     * wrap_content frame grew the row to the screen's height and pushed the transport off.
+     * The frame then re-measures this match_parent child to exactly the seek bar's size.
+     */
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        setMeasuredDimension(resolveSize(0, widthMeasureSpec), resolveSize(0, heightMeasureSpec))
+    }
+
     override fun onDraw(canvas: Canvas) {
         val bar = seekBar ?: return
         val max = bar.max
